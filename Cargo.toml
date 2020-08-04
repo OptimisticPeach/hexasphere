@@ -3,6 +3,14 @@ name = "hexasphere"
 version = "0.1.0"
 authors = ["OptimisticPeach <patrikbuhring@yahoo.com>"]
 edition = "2018"
+description = """
+A library to evenly tile hexagons on a sphere.
+"""
+readme = "readme.md"
+repository = "https://github.com/OptimisticPeach/hexasphere.git"
+license = "MPL-2.0"
+keywords = ["gamedev", "grahpics", "hexagons", "sphere", "math"]
+categories = ["algorithms", "data-structures", "graphics", "mathematics", "rendering::data-formats"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
