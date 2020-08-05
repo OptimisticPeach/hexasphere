@@ -348,7 +348,7 @@ impl TriangleContents {
     pub fn add_indices(&self, buffer: &mut Vec<u32>) {
         use TriangleContents::*;
         match self {
-            None | One(_) => panic!("Not enough vertices to create triangle!"),
+            None | One(_) => {},
             &Three {
                 a,
                 b,
@@ -955,20 +955,26 @@ mod tests {
 
     #[test]
     fn new() {
-        let _ = Hexasphere::new(0, |_| ());
+        let x = Hexasphere::new(0, |_| ());
+        x.get_indices(0, &mut Vec::new());
     }
 
     #[test]
     fn one() {
-        let _ = Hexasphere::new(1, |_| ());
+        let x = Hexasphere::new(1, |_| ());
+        x.get_indices(0, &mut Vec::new());
     }
 
     #[test]
     fn second_layer_inner() {
-        let _ = Hexasphere::new(2, |_| ());
-        let _ = Hexasphere::new(3, |_| ());
-        let _ = Hexasphere::new(5, |_| ());
-        let _ = Hexasphere::new(6, |_| ());
+        let x = Hexasphere::new(2, |_| ());
+        x.get_indices(0, &mut Vec::new());
+        let x = Hexasphere::new(3, |_| ());
+        x.get_indices(0, &mut Vec::new());
+        let x = Hexasphere::new(5, |_| ());
+        x.get_indices(0, &mut Vec::new());
+        let x = Hexasphere::new(6, |_| ());
+        x.get_indices(0, &mut Vec::new());
     }
 
     #[test]
