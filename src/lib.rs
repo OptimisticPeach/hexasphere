@@ -800,6 +800,10 @@ impl<T> Hexasphere<T> {
     pub fn subdivisions(&self) -> usize {
         self.subdivisions
     }
+
+    pub fn raw_data(&self) -> &[T] {
+        &self.data
+    }
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
