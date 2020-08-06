@@ -71,19 +71,20 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    pub fn one(ab: &[u32], bc: &[u32], points: &mut Vec<Vec3>) -> Self {
+    fn one(ab: &[u32], bc: &[u32], points: &mut Vec<Vec3>) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
         let p2 = points[bc[1] as usize];
         let index = points.len() as u32;
-        points.push(geometric_slerp(p1, p2, 0.5));
+        points.push(geometric_slerp_half(p1, p2));
         TriangleContents::One(index)
     }
+
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    pub fn three(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
+    fn three(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -96,9 +97,9 @@ impl TriangleContents {
                 let bc = points[bc[1] as usize];
                 let ca = points[ca[1] as usize];
 
-                let a = geometric_slerp(ab, ca, 0.5);
-                let b = geometric_slerp(bc, ab, 0.5);
-                let c = geometric_slerp(ca, bc, 0.5);
+                let a = geometric_slerp_half(ab, ca);
+                let b = geometric_slerp_half(bc, ab);
+                let c = geometric_slerp_half(ca, bc);
 
                 points.extend_from_slice(&[b, c]);
                 points[x as usize] = a;
@@ -114,7 +115,7 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    pub fn six(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
+    fn six(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -127,20 +128,20 @@ impl TriangleContents {
                 b: b_index,
                 c: c_index,
             } => {
-                let aba = points[ab[2] as usize];
-                let abb = points[ab[3] as usize];
-                let bcb = points[bc[2] as usize];
-                let bcc = points[bc[3] as usize];
-                let cac = points[ca[2] as usize];
-                let caa = points[ca[3] as usize];
+                let aba = points[ab[1] as usize];
+                let abb = points[ab[2] as usize];
+                let bcb = points[bc[1] as usize];
+                let bcc = points[bc[2] as usize];
+                let cac = points[ca[1] as usize];
+                let caa = points[ca[2] as usize];
 
-                let a = geometric_slerp(aba, caa, 0.5);
-                let b = geometric_slerp(abb, bcb, 0.5);
-                let c = geometric_slerp(bcc, cac, 0.5);
+                let a = geometric_slerp_half(aba, caa);
+                let b = geometric_slerp_half(abb, bcb);
+                let c = geometric_slerp_half(bcc, cac);
 
-                let ab = geometric_slerp(a, b, 0.5);
-                let bc = geometric_slerp(b, c, 0.5);
-                let ca = geometric_slerp(c, a, 0.5);
+                let ab = geometric_slerp_half(a, b);
+                let bc = geometric_slerp_half(b, c);
+                let ca = geometric_slerp_half(c, a);
 
                 points[a_index as usize] = a;
                 points[b_index as usize] = b;
@@ -213,9 +214,9 @@ impl TriangleContents {
                 let cac = points[ca[1] as usize];
                 let caa = points[ca[outer_len - 2] as usize];
 
-                points[a_idx as usize] = geometric_slerp(aba, caa, 0.5);
-                points[b_idx as usize] = geometric_slerp(abb, bcb, 0.5);
-                points[c_idx as usize] = geometric_slerp(bcc, cac, 0.5);
+                points[a_idx as usize] = geometric_slerp_half(aba, caa);
+                points[b_idx as usize] = geometric_slerp_half(abb, bcb);
+                points[c_idx as usize] = geometric_slerp_half(bcc, cac);
 
                 let ab = &sides[0..side_length];
                 let bc = &sides[side_length..side_length * 2];
@@ -382,6 +383,7 @@ impl TriangleContents {
                 let ca = &sides[my_side_length * 2..];
 
                 add_indices_triangular(a, b, c, ab, bc, ca, &**contents, buffer);
+                contents.add_indices(buffer);
             }
         }
     }
@@ -533,17 +535,21 @@ impl<T> Hexasphere<T> {
     pub fn new(subdivisions: usize, generator: impl FnMut(Vec3) -> T) -> Self {
         let mut this = Self {
             points: vec![
+                // North Pole
                 Vec3::new(0.0, 1.0, 0.0),
+                // Top Ring
                 Vec3::new(0.8944271909999159, 0.4472135954999579, 0.0),
                 Vec3::new(0.27639320225002106, 0.4472135954999579, 0.8506508083520399),
                 Vec3::new(-0.7236067977499788, 0.4472135954999579, 0.5257311121191337),
                 Vec3::new(-0.723606797749979, 0.4472135954999579, -0.5257311121191335),
                 Vec3::new(0.27639320225002084, 0.4472135954999579, -0.85065080835204),
+                // Bottom Ring
+                Vec3::new(0.7236067977499787, -0.4472135954999579, -0.5257311121191339),
                 Vec3::new(0.723606797749979, -0.4472135954999579, 0.5257311121191334),
                 Vec3::new(-0.27639320225002073, -0.4472135954999579, 0.85065080835204),
                 Vec3::new(-0.8944271909999159, -0.4472135954999579, 0.0),
                 Vec3::new(-0.2763932022500214, -0.4472135954999579, -0.8506508083520398),
-                Vec3::new(0.7236067977499787, -0.4472135954999579, -0.5257311121191339),
+                // South Pole
                 Vec3::new(0.0, -1.0, 0.0),
             ],
             triangles: [
@@ -807,11 +813,21 @@ impl<T> Hexasphere<T> {
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
+#[allow(dead_code)]
 fn geometric_slerp(a: Vec3, b: Vec3, p: f32) -> Vec3 {
     let angle = a.dot(b).acos();
 
     let sin = angle.sin().recip();
     a * (((1.0 - p) * angle).sin() * sin) + b * ((p * angle).sin() * sin)
+}
+
+fn geometric_slerp_half(a: Vec3, b: Vec3) -> Vec3 {
+    let angle = a.dot(b).acos();
+
+    let sin_denom = angle.sin().recip();
+    let sin_numer = (angle * 0.5).sin();
+
+    (a + b) * sin_denom * sin_numer
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
@@ -893,14 +909,13 @@ mod tests {
 
     #[test]
     fn slerp_one() {
-        use super::geometric_slerp;
-
+        use super::geometric_slerp_half;
         let p1 = Vec3::new(0.360492952832, 0.932761936915, 0.0);
         let p2 = Vec3::new(0.975897449331, 0.218229623081, 0.0);
 
         let expected = Vec3::new(0.757709663147, 0.652591806854, 0.0);
 
-        let result = geometric_slerp(p1, p2, 0.5);
+        let result = geometric_slerp_half(p1, p2);
 
         assert!((expected - result).length() <= EPSILON);
 
@@ -910,7 +925,7 @@ mod tests {
 
         let expected = Vec3::new(-0.681787771301, 0.0, 0.731550022148);
 
-        let result = geometric_slerp(p1, p2, 0.5);
+        let result = geometric_slerp_half(p1, p2);
 
         assert!((expected - result).length() <= EPSILON);
     }
