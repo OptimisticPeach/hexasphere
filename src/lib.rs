@@ -4,7 +4,7 @@
 //! Note this is *not* an explicit rewrite of `hexasphere.js`.
 //!
 
-use glam::Vec3;
+use glam::Vec3A;
 
 ///
 /// Contents of one of the main triangular faces.
@@ -68,10 +68,11 @@ impl TriangleContents {
     pub fn none() -> Self {
         Self::None
     }
+
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(ab: &[u32], bc: &[u32], points: &mut Vec<Vec3>) -> Self {
+    fn one(ab: &[u32], bc: &[u32], points: &mut Vec<Vec3A>) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
@@ -84,7 +85,7 @@ impl TriangleContents {
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
+    fn three(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3A>) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -112,10 +113,11 @@ impl TriangleContents {
             _ => panic!("Self is {:?} while it should be One", self)
         }
     }
+
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
+    fn six(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3A>) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -164,7 +166,7 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3>) {
+    pub fn subdivide(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3A>) {
         use TriangleContents::*;
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), ca.len());
@@ -199,7 +201,7 @@ impl TriangleContents {
                 ref mut contents,
                 ref mut my_side_length,
             } => {
-                points.extend_from_slice(&[Vec3::zero(), Vec3::zero(), Vec3::zero()]);
+                points.extend_from_slice(&[Vec3A::zero(), Vec3A::zero(), Vec3A::zero()]);
                 let len = points.len() as u32;
                 sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
                 *my_side_length += 1;
@@ -428,7 +430,7 @@ impl Default for Triangle {
 }
 
 impl Triangle {
-    fn subdivide_edges<'a>(&'a mut self, prev: &'a mut [Self], post: &'a mut [Self], points: &mut Vec<Vec3>) -> usize {
+    fn subdivide_edges<'a>(&'a mut self, prev: &'a mut [Self], post: &'a mut [Self], points: &mut Vec<Vec3A>) -> usize {
         fn canonically_index<'a>(index: usize, prev: &'a mut [Triangle], post: &'a mut [Triangle]) -> &'a mut Triangle {
             if index >= prev.len() {
                 &mut post[index - (prev.len() + 1)]
@@ -449,7 +451,7 @@ impl Triangle {
                 *divisions = edge;
             } else {
                 divisions.push(points.len() as u32);
-                points.push(Vec3::zero());
+                points.push(Vec3A::zero());
 
                 geometric_slerp_multiple(points[p1 as usize], points[p2 as usize], divisions, points);
             }
@@ -488,7 +490,7 @@ impl Triangle {
         }
     }
 
-    pub fn subdivide(&mut self, prev: &mut [Self], post: &mut [Self], points: &mut Vec<Vec3>) {
+    pub fn subdivide(&mut self, prev: &mut [Self], post: &mut [Self], points: &mut Vec<Vec3A>) {
         let side_length = self.subdivide_edges(prev, post, points) + 1;
 
         if side_length > 2 {
@@ -518,7 +520,7 @@ impl Triangle {
 /// such as linear interpolation and then normalization.
 ///
 pub struct Hexasphere<T> {
-    points: Vec<Vec3>,
+    points: Vec<Vec3A>,
     data: Vec<T>,
     triangles: [Triangle; 20],
     subdivisions: usize,
@@ -532,25 +534,25 @@ impl<T> Hexasphere<T> {
     /// `generator` permits you to create a unique value for every point
     /// on the sphere.
     ///
-    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3) -> T) -> Self {
+    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
         let mut this = Self {
             points: vec![
                 // North Pole
-                Vec3::new(0.0, 1.0, 0.0),
+                Vec3A::new(0.0, 1.0, 0.0),
                 // Top Ring
-                Vec3::new(0.8944271909999159, 0.4472135954999579, 0.0),
-                Vec3::new(0.27639320225002106, 0.4472135954999579, 0.8506508083520399),
-                Vec3::new(-0.7236067977499788, 0.4472135954999579, 0.5257311121191337),
-                Vec3::new(-0.723606797749979, 0.4472135954999579, -0.5257311121191335),
-                Vec3::new(0.27639320225002084, 0.4472135954999579, -0.85065080835204),
+                Vec3A::new(0.89442719099991585541, 0.44721359549995792770, 0.00000000000000000000),
+                Vec3A::new(0.27639320225002106390, 0.44721359549995792770, 0.85065080835203987775),
+                Vec3A::new(-0.72360679774997882507, 0.44721359549995792770, 0.52573111211913370333),
+                Vec3A::new(-0.72360679774997904712, 0.44721359549995792770, -0.52573111211913348129),
+                Vec3A::new(0.27639320225002084186, 0.44721359549995792770, -0.85065080835203998877),
                 // Bottom Ring
-                Vec3::new(0.7236067977499787, -0.4472135954999579, -0.5257311121191339),
-                Vec3::new(0.723606797749979, -0.4472135954999579, 0.5257311121191334),
-                Vec3::new(-0.27639320225002073, -0.4472135954999579, 0.85065080835204),
-                Vec3::new(-0.8944271909999159, -0.4472135954999579, 0.0),
-                Vec3::new(-0.2763932022500214, -0.4472135954999579, -0.8506508083520398),
+                Vec3A::new(0.72360679774997871405, -0.44721359549995792770, -0.52573111211913392538),
+                Vec3A::new(0.72360679774997904712, -0.44721359549995792770, 0.52573111211913337026),
+                Vec3A::new(-0.27639320225002073084, -0.44721359549995792770, 0.85065080835203998877),
+                Vec3A::new(-0.89442719099991585541, -0.44721359549995792770, 0.00000000000000032861),
+                Vec3A::new(-0.27639320225002139697, -0.44721359549995792770, -0.85065080835203976672),
                 // South Pole
-                Vec3::new(0.0, -1.0, 0.0),
+                Vec3A::new(0.0, -1.0, 0.0),
             ],
             triangles: [
                 // Top
@@ -792,7 +794,7 @@ impl<T> Hexasphere<T> {
         }
     }
 
-    pub fn raw_points(&self) -> &[Vec3] {
+    pub fn raw_points(&self) -> &[Vec3A] {
         &self.points
     }
 
@@ -814,14 +816,14 @@ impl<T> Hexasphere<T> {
 
 /// Note: `a` and `b` should both be normalized for normalized results.
 #[allow(dead_code)]
-fn geometric_slerp(a: Vec3, b: Vec3, p: f32) -> Vec3 {
+fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
     let angle = a.dot(b).acos();
 
     let sin = angle.sin().recip();
     a * (((1.0 - p) * angle).sin() * sin) + b * ((p * angle).sin() * sin)
 }
 
-fn geometric_slerp_half(a: Vec3, b: Vec3) -> Vec3 {
+fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
     let angle = a.dot(b).acos();
 
     let sin_denom = angle.sin().recip();
@@ -831,7 +833,7 @@ fn geometric_slerp_half(a: Vec3, b: Vec3) -> Vec3 {
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
-fn geometric_slerp_multiple<'a>(a: Vec3, b: Vec3, indices: &[u32], points: &mut [Vec3]) {
+fn geometric_slerp_multiple<'a>(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
     let angle = a.dot(b).acos();
     let sin = angle.sin().recip();
 
@@ -901,7 +903,7 @@ fn add_indices_triangular(a: u32, b: u32, c: u32, ab: &[u32], bc: &[u32], ca: &[
 
 #[cfg(test)]
 mod tests {
-    use glam::Vec3;
+    use glam::Vec3A;
     use crate::Hexasphere;
 
     // Starting points aren't _quite_ precise enough to use `f32::EPSILON`.
@@ -910,20 +912,20 @@ mod tests {
     #[test]
     fn slerp_one() {
         use super::geometric_slerp_half;
-        let p1 = Vec3::new(0.360492952832, 0.932761936915, 0.0);
-        let p2 = Vec3::new(0.975897449331, 0.218229623081, 0.0);
+        let p1 = Vec3A::new(0.360492952832, 0.932761936915, 0.0);
+        let p2 = Vec3A::new(0.975897449331, 0.218229623081, 0.0);
 
-        let expected = Vec3::new(0.757709663147, 0.652591806854, 0.0);
+        let expected = Vec3A::new(0.757709663147, 0.652591806854, 0.0);
 
         let result = geometric_slerp_half(p1, p2);
 
         assert!((expected - result).length() <= EPSILON);
 
         // Another test case
-        let p1 = Vec3::new(-0.24953852315,  0.0, 0.968364872073);
-        let p2 = Vec3::new(-0.948416666565, 0.0, 0.317026539239);
+        let p1 = Vec3A::new(-0.24953852315,  0.0, 0.968364872073);
+        let p2 = Vec3A::new(-0.948416666565, 0.0, 0.317026539239);
 
-        let expected = Vec3::new(-0.681787771301, 0.0, 0.731550022148);
+        let expected = Vec3A::new(-0.681787771301, 0.0, 0.731550022148);
 
         let result = geometric_slerp_half(p1, p2);
 
@@ -934,31 +936,31 @@ mod tests {
     fn slerp_many() {
         use super::geometric_slerp_multiple;
 
-        let p1 = Vec3::new(0.0, -0.885330189449, 0.464962854054);
-        let p2 = Vec3::new(0.0, 0.946042343528, 0.324043028395);
+        let p1 = Vec3A::new(0.0, -0.885330189449, 0.464962854054);
+        let p2 = Vec3A::new(0.0, 0.946042343528, 0.324043028395);
 
-        let expected = Vec3::new(0.0, 0.0767208624118, 0.997052611085);
+        let expected = Vec3A::new(0.0, 0.0767208624118, 0.997052611085);
 
-        let mut result = Vec3::zero();
+        let mut result = Vec3A::zero();
         geometric_slerp_multiple(p1, p2, &[0], std::slice::from_mut(&mut result));
 
         assert!((expected - result).length() <= EPSILON);
 
-        let p1 = Vec3::new(0.876621956288, 0.0, 0.481179743707);
-        let p2 = Vec3::new(-0.391617625614, 0.0, -0.920128053756);
+        let p1 = Vec3A::new(0.876621956288, 0.0, 0.481179743707);
+        let p2 = Vec3A::new(-0.391617625614, 0.0, -0.920128053756);
 
         let expected = [
-            Vec3::new(0.999975758841, 0.0, 0.00696288230076),
-            Vec3::new(0.883237589397, 0.0, -0.468925751774),
-            Vec3::new(0.554436024709, 0.0, -0.83222634812),
-            Vec3::new(0.0925155945469, 0.0, -0.995711235633),
+            Vec3A::new(0.999975758841, 0.0, 0.00696288230076),
+            Vec3A::new(0.883237589397, 0.0, -0.468925751774),
+            Vec3A::new(0.554436024709, 0.0, -0.83222634812),
+            Vec3A::new(0.0925155945469, 0.0, -0.995711235633),
         ];
 
         let mut result = [
-            Vec3::zero(),
-            Vec3::zero(),
-            Vec3::zero(),
-            Vec3::zero(),
+            Vec3A::zero(),
+            Vec3A::zero(),
+            Vec3A::zero(),
+            Vec3A::zero(),
         ];
 
         geometric_slerp_multiple(p1, p2, &[0, 1, 2, 3], &mut result);
