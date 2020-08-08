@@ -5,6 +5,9 @@
 //!
 
 use glam::Vec3A;
+use std::ops::Index;
+
+use Slice::*;
 
 ///
 /// Contents of one of the main triangular faces.
@@ -72,7 +75,7 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(ab: &[u32], bc: &[u32], points: &mut Vec<Vec3A>) -> Self {
+    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
@@ -85,7 +88,7 @@ impl TriangleContents {
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3A>) {
+    fn three(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -117,7 +120,7 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3A>) {
+    fn six(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -166,7 +169,7 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(&mut self, ab: &[u32], bc: &[u32], ca: &[u32], points: &mut Vec<Vec3A>) {
+    pub fn subdivide(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>) {
         use TriangleContents::*;
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), ca.len());
@@ -228,7 +231,7 @@ impl TriangleContents {
                 geometric_slerp_multiple(points[b_idx as usize], points[c_idx as usize], bc, points);
                 geometric_slerp_multiple(points[c_idx as usize], points[a_idx as usize], ca, points);
 
-                contents.subdivide(ab, bc, ca, points);
+                contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points);
             }
         }
     }
@@ -384,9 +387,35 @@ impl TriangleContents {
                 let bc = &sides[my_side_length..my_side_length * 2];
                 let ca = &sides[my_side_length * 2..];
 
-                add_indices_triangular(a, b, c, ab, bc, ca, &**contents, buffer);
+                // Contents are always stored forward.
+                add_indices_triangular(a, b, c, Forward(ab), Forward(bc), Forward(ca), &**contents, buffer);
                 contents.add_indices(buffer);
             }
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+enum Slice<'a, T> {
+    Forward(&'a [T]),
+    Backward(&'a [T])
+}
+
+impl<'a, T> Slice<'a, T> {
+    fn len(&self) -> usize {
+        match self {
+            &Forward(x) | &Backward(x) => x.len()
+        }
+    }
+}
+
+impl<'a, T> Index<usize> for Slice<'a, T> {
+    type Output = <[T] as Index<usize>>::Output;
+
+    fn index(&self, idx: usize) -> &Self::Output {
+        match self {
+            Forward(x) => x.index(idx),
+            Backward(x) => x.index((x.len() - 1) - idx)
         }
     }
 }
@@ -395,17 +424,13 @@ struct Triangle {
     pub a: u32,
     pub b: u32,
     pub c: u32,
-    pub ab: Vec<u32>,
-    pub bc: Vec<u32>,
-    pub ca: Vec<u32>,
+    pub ab: usize,
+    pub bc: usize,
+    pub ca: usize,
+    pub ab_forward: bool,
+    pub bc_forward: bool,
+    pub ca_forward: bool,
 
-    pub ab_done: bool,
-    pub bc_done: bool,
-    pub ca_done: bool,
-
-    pub ab_neighbour: usize,
-    pub bc_neighbour: usize,
-    pub ca_neighbour: usize,
     pub contents: TriangleContents,
 }
 
@@ -415,91 +440,85 @@ impl Default for Triangle {
             a: 0,
             b: 0,
             c: 0,
-            ab: vec![],
-            bc: vec![],
-            ca: vec![],
-            ab_done: true,
-            bc_done: true,
-            ca_done: true,
-            ab_neighbour: 0,
-            bc_neighbour: 0,
-            ca_neighbour: 0,
+            ab: 0,
+            bc: 0,
+            ca: 0,
+            ab_forward: false,
+            bc_forward: false,
+            ca_forward: false,
             contents: TriangleContents::None,
         }
     }
 }
 
 impl Triangle {
-    fn subdivide_edges<'a>(&'a mut self, prev: &'a mut [Self], post: &'a mut [Self], points: &mut Vec<Vec3A>) -> usize {
-        fn canonically_index<'a>(index: usize, prev: &'a mut [Triangle], post: &'a mut [Triangle]) -> &'a mut Triangle {
-            if index >= prev.len() {
-                &mut post[index - (prev.len() + 1)]
-            } else {
-                &mut prev[index]
-            }
-        };
-
-        let mut divide = move |
-            neighbour: usize,
+    fn subdivide_edges<'a>(&'a mut self, edges: &mut [(Vec<u32>, bool); 30], points: &mut Vec<Vec3A>) -> usize {
+        let mut divide = |
             p1: u32,
             p2: u32,
-            done: &mut bool,
-            divisions: &mut Vec<u32>,
+            edge_idx: usize,
+            forward: &mut bool,
         | {
-            if let Some(edge) = canonically_index(neighbour, prev, post).shared_state(p1, p2) {
-                *done = true;
-                *divisions = edge;
-            } else {
-                divisions.push(points.len() as u32);
+            if !edges[edge_idx].1 {
+                edges[edge_idx].0.push(points.len() as u32);
                 points.push(Vec3A::zero());
 
-                geometric_slerp_multiple(points[p1 as usize], points[p2 as usize], divisions, points);
+                geometric_slerp_multiple(points[p1 as usize], points[p2 as usize], &edges[edge_idx].0, points);
+                edges[edge_idx].1 = true;
+                *forward = true;
+            } else {
+                *forward = false;
             }
         };
 
-        divide(self.ab_neighbour, self.a, self.b, &mut self.ab_done, &mut self.ab);
-        divide(self.bc_neighbour, self.b, self.c, &mut self.bc_done, &mut self.bc);
-        divide(self.ca_neighbour, self.c, self.a, &mut self.ca_done, &mut self.ca);
+        divide(self.a, self.b, self.ab, &mut self.ab_forward);
+        divide(self.b, self.c, self.bc, &mut self.bc_forward);
+        divide(self.c, self.a, self.ca, &mut self.ca_forward);
 
-        self.ab.len()
+        edges[self.ab].0.len()
     }
 
-    fn shared_state(&self, p1: u32, p2: u32) -> Option<Vec<u32>> {
-        assert_ne!(p1, p2);
-
-        if (p1, p2) == (self.a, self.b) || (p2, p1) == (self.a, self.b) {
-            if self.ab_done {
-                Some(self.ab.clone())
-            } else {
-                None
-            }
-        } else if (p1, p2) == (self.b, self.c) || (p2, p1) == (self.b, self.c) {
-            if self.bc_done {
-                Some(self.bc.clone())
-            } else {
-                None
-            }
-        } else if (p1, p2) == (self.c, self.a) || (p2, p1) == (self.c, self.a) {
-            if self.ca_done {
-                Some(self.ca.clone())
-            } else {
-                None
-            }
-        } else {
-            panic!("Internal Error: One of points {} and {} are not in self's corners: {:?}", p1, p2, [self.a, self.b, self.c]);
-        }
-    }
-
-    pub fn subdivide(&mut self, prev: &mut [Self], post: &mut [Self], points: &mut Vec<Vec3A>) {
-        let side_length = self.subdivide_edges(prev, post, points) + 1;
+    pub fn subdivide(&mut self, edges: &mut [(Vec<u32>, bool); 30], points: &mut Vec<Vec3A>) {
+        let side_length = self.subdivide_edges(edges, points) + 1;
 
         if side_length > 2 {
-            self.contents.subdivide(&self.ab, &self.bc, &self.ca, points);
+            let ab = if self.ab_forward {
+                Forward(&edges[self.ab].0)
+            } else {
+                Backward(&edges[self.ab].0)
+            };
+            let bc = if self.bc_forward {
+                Forward(&edges[self.bc].0)
+            } else {
+                Backward(&edges[self.bc].0)
+            };
+            let ca = if self.ca_forward {
+                Forward(&edges[self.ca].0)
+            } else {
+                Backward(&edges[self.ca].0)
+            };
+            self.contents.subdivide(ab, bc, ca, points);
         }
     }
 
-    pub fn add_indices(&self, buffer: &mut Vec<u32>) {
-        add_indices_triangular(self.a, self.b, self.c, &self.ab, &self.bc, &self.ca, &self.contents, buffer);
+    pub fn add_indices(&self, buffer: &mut Vec<u32>, edges: &[(Vec<u32>, bool); 30]) {
+        let ab = if self.ab_forward {
+            Forward(&edges[self.ab].0)
+        } else {
+            Backward(&edges[self.ab].0)
+        };
+        let bc = if self.bc_forward {
+            Forward(&edges[self.bc].0)
+        } else {
+            Backward(&edges[self.bc].0)
+        };
+        let ca = if self.ca_forward {
+            Forward(&edges[self.ca].0)
+        } else {
+            Backward(&edges[self.ca].0)
+        };
+
+        add_indices_triangular(self.a, self.b, self.c, ab, bc, ca, &self.contents, buffer);
 
         self.contents.add_indices(buffer);
     }
@@ -523,6 +542,7 @@ pub struct Hexasphere<T> {
     points: Vec<Vec3A>,
     data: Vec<T>,
     triangles: [Triangle; 20],
+    shared_edges: [(Vec<u32>, bool); 30],
     subdivisions: usize,
 }
 
@@ -554,6 +574,14 @@ impl<T> Hexasphere<T> {
                 // South Pole
                 Vec3A::new(0.0, -1.0, 0.0),
             ],
+            shared_edges: [
+                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+            ],
             triangles: [
                 // Top
                 Triangle {
@@ -561,9 +589,9 @@ impl<T> Hexasphere<T> {
                     b: 2,
                     c: 1,
 
-                    ab_neighbour: 1,
-                    bc_neighbour: 6,
-                    ca_neighbour: 4,
+                    ab: 0,
+                    bc: 5,
+                    ca: 4,
                     ..Default::default()
                 }, //0
                 Triangle {
@@ -571,9 +599,9 @@ impl<T> Hexasphere<T> {
                     b: 3,
                     c: 2,
 
-                    ab_neighbour: 2,
-                    bc_neighbour: 7,
-                    ca_neighbour: 0,
+                    ab: 1,
+                    bc: 6,
+                    ca: 0,
                     ..Default::default()
                 }, //1
                 Triangle {
@@ -581,9 +609,9 @@ impl<T> Hexasphere<T> {
                     b: 4,
                     c: 3,
 
-                    ab_neighbour: 3,
-                    bc_neighbour: 8,
-                    ca_neighbour: 1,
+                    ab: 2,
+                    bc: 1,
+                    ca: 7,
                     ..Default::default()
                 }, //2
                 Triangle {
@@ -591,9 +619,9 @@ impl<T> Hexasphere<T> {
                     b: 5,
                     c: 4,
 
-                    ab_neighbour: 4,
-                    bc_neighbour: 9,
-                    ca_neighbour: 2,
+                    ab: 3,
+                    bc: 8,
+                    ca: 2,
                     ..Default::default()
                 }, //3
                 Triangle {
@@ -601,9 +629,9 @@ impl<T> Hexasphere<T> {
                     b: 1,
                     c: 5,
 
-                    ab_neighbour: 0,
-                    bc_neighbour: 5,
-                    ca_neighbour: 3,
+                    ab: 4,
+                    bc: 9,
+                    ca: 3,
                     ..Default::default()
                 }, //4
                 // First ring
@@ -612,9 +640,9 @@ impl<T> Hexasphere<T> {
                     b: 1,
                     c: 6,
 
-                    ab_neighbour: 4,
-                    bc_neighbour: 11,
-                    ca_neighbour: 10,
+                    ab: 9,
+                    bc: 10,
+                    ca: 15,
                     ..Default::default()
                 }, //5
                 Triangle {
@@ -622,9 +650,9 @@ impl<T> Hexasphere<T> {
                     b: 2,
                     c: 7,
 
-                    ab_neighbour: 0,
-                    bc_neighbour: 12,
-                    ca_neighbour: 11,
+                    ab: 5,
+                    bc: 11,
+                    ca: 16,
                     ..Default::default()
                 }, //6
                 Triangle {
@@ -632,9 +660,9 @@ impl<T> Hexasphere<T> {
                     b: 3,
                     c: 8,
 
-                    ab_neighbour: 1,
-                    bc_neighbour: 13,
-                    ca_neighbour: 12,
+                    ab: 6,
+                    bc: 12,
+                    ca: 17,
                     ..Default::default()
                 }, //7
                 Triangle {
@@ -642,9 +670,9 @@ impl<T> Hexasphere<T> {
                     b: 4,
                     c: 9,
 
-                    ab_neighbour: 2,
-                    bc_neighbour: 14,
-                    ca_neighbour: 13,
+                    ab: 7,
+                    bc: 13,
+                    ca: 18,
                     ..Default::default()
                 }, //8
                 Triangle {
@@ -652,9 +680,9 @@ impl<T> Hexasphere<T> {
                     b: 5,
                     c: 10,
 
-                    ab_neighbour: 3,
-                    bc_neighbour: 10,
-                    ca_neighbour: 14,
+                    ab: 8,
+                    bc: 14,
+                    ca: 19,
                     ..Default::default()
                 }, //9
                 // Second ring
@@ -663,9 +691,9 @@ impl<T> Hexasphere<T> {
                     b: 6,
                     c: 10,
 
-                    ab_neighbour: 5,
-                    bc_neighbour: 15,
-                    ca_neighbour: 9,
+                    ab: 15,
+                    bc: 20,
+                    ca: 14,
                     ..Default::default()
                 }, //10
                 Triangle {
@@ -673,9 +701,9 @@ impl<T> Hexasphere<T> {
                     b: 7,
                     c: 6,
 
-                    ab_neighbour: 6,
-                    bc_neighbour: 16,
-                    ca_neighbour: 5,
+                    ab: 16,
+                    bc: 21,
+                    ca: 10,
                     ..Default::default()
                 }, //11
                 Triangle {
@@ -683,9 +711,9 @@ impl<T> Hexasphere<T> {
                     b: 8,
                     c: 7,
 
-                    ab_neighbour: 7,
-                    bc_neighbour: 17,
-                    ca_neighbour: 6,
+                    ab: 17,
+                    bc: 22,
+                    ca: 11,
                     ..Default::default()
                 }, //12
                 Triangle {
@@ -693,9 +721,9 @@ impl<T> Hexasphere<T> {
                     b: 9,
                     c: 8,
 
-                    ab_neighbour: 8,
-                    bc_neighbour: 18,
-                    ca_neighbour: 7,
+                    ab: 18,
+                    bc: 23,
+                    ca: 12,
                     ..Default::default()
                 }, //13
                 Triangle {
@@ -703,9 +731,9 @@ impl<T> Hexasphere<T> {
                     b: 10,
                     c: 9,
 
-                    ab_neighbour: 9,
-                    bc_neighbour: 19,
-                    ca_neighbour: 8,
+                    ab: 19,
+                    bc: 24,
+                    ca: 13,
                     ..Default::default()
                 }, //14
                 // Bottom
@@ -714,9 +742,9 @@ impl<T> Hexasphere<T> {
                     b: 6,
                     c: 11,
 
-                    ab_neighbour: 10,
-                    bc_neighbour: 16,
-                    ca_neighbour: 19,
+                    ab: 20,
+                    bc: 26,
+                    ca: 25,
                     ..Default::default()
                 }, //15
                 Triangle {
@@ -724,9 +752,9 @@ impl<T> Hexasphere<T> {
                     b: 7,
                     c: 11,
 
-                    ab_neighbour: 11,
-                    bc_neighbour: 17,
-                    ca_neighbour: 15,
+                    ab: 21,
+                    bc: 27,
+                    ca: 26,
                     ..Default::default()
                 }, //16
                 Triangle {
@@ -734,9 +762,9 @@ impl<T> Hexasphere<T> {
                     b: 8,
                     c: 11,
 
-                    ab_neighbour: 12,
-                    bc_neighbour: 18,
-                    ca_neighbour: 16,
+                    ab: 22,
+                    bc: 28,
+                    ca: 27,
                     ..Default::default()
                 }, //17
                 Triangle {
@@ -744,9 +772,9 @@ impl<T> Hexasphere<T> {
                     b: 9,
                     c: 11,
 
-                    ab_neighbour: 13,
-                    bc_neighbour: 19,
-                    ca_neighbour: 17,
+                    ab: 23,
+                    bc: 29,
+                    ca: 28,
                     ..Default::default()
                 }, //18
                 Triangle {
@@ -754,9 +782,9 @@ impl<T> Hexasphere<T> {
                     b: 10,
                     c: 11,
 
-                    ab_neighbour: 14,
-                    bc_neighbour: 15,
-                    ca_neighbour: 18,
+                    ab: 24,
+                    bc: 25,
+                    ca: 29,
                     ..Default::default()
                 }, //19
             ],
@@ -779,18 +807,12 @@ impl<T> Hexasphere<T> {
     }
 
     fn subdivide(&mut self) {
-        for i in &mut self.triangles {
-            i.ab_done = false;
-            i.bc_done = false;
-            i.ca_done = false;
+        for (_, done) in &mut self.shared_edges {
+            *done = false;
         }
 
-        for i in 0..self.triangles.len() {
-            let (prev, post) = self.triangles.split_at_mut(i);
-            let (triangle, post) = post.split_at_mut(1);
-            let triangle = &mut triangle[0];
-
-            triangle.subdivide(prev, post, &mut self.points);
+        for triangle in &mut self.triangles {
+            triangle.subdivide(&mut self.shared_edges, &mut self.points);
         }
     }
 
@@ -802,7 +824,7 @@ impl<T> Hexasphere<T> {
     /// Appends the indices for the triangle into `buffer`.
     ///
     pub fn get_indices(&self, triangle: usize, buffer: &mut Vec<u32>) {
-        self.triangles[triangle].add_indices(buffer);
+        self.triangles[triangle].add_indices(buffer, &self.shared_edges);
     }
 
     pub fn subdivisions(&self) -> usize {
@@ -844,7 +866,7 @@ fn geometric_slerp_multiple<'a>(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
     }
 }
 
-fn add_indices_triangular(a: u32, b: u32, c: u32, ab: &[u32], bc: &[u32], ca: &[u32], contents: &TriangleContents, buffer: &mut Vec<u32>) {
+fn add_indices_triangular(a: u32, b: u32, c: u32, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, contents: &TriangleContents, buffer: &mut Vec<u32>) {
     let subdivisions = ab.len();
     if subdivisions == 0 {
         buffer.extend_from_slice(&[a, b, c]);
@@ -905,6 +927,7 @@ fn add_indices_triangular(a: u32, b: u32, c: u32, ab: &[u32], bc: &[u32], ca: &[
 mod tests {
     use glam::Vec3A;
     use crate::Hexasphere;
+    use crate::Slice::Forward;
 
     // Starting points aren't _quite_ precise enough to use `f32::EPSILON`.
     const EPSILON: f32 = 0.0000002;
@@ -1001,7 +1024,7 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        add_indices_triangular(0, 1, 2, &[], &[], &[], &TriangleContents::none(), &mut buffer);
+        add_indices_triangular(0, 1, 2, Forward(&[]), Forward(&[]), Forward(&[]), &TriangleContents::none(), &mut buffer);
 
         assert_eq!(buffer, &[0, 1, 2]);
     }
@@ -1013,7 +1036,7 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        add_indices_triangular(0, 1, 2, &[3], &[4], &[5], &TriangleContents::none(), &mut buffer);
+        add_indices_triangular(0, 1, 2, Forward(&[3]), Forward(&[4]), Forward(&[5]), &TriangleContents::none(), &mut buffer);
 
         assert_eq!(buffer, &[
             0, 3, 5,
@@ -1030,7 +1053,7 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        add_indices_triangular(0, 3, 6, &[1, 2], &[4, 5], &[7, 8], &TriangleContents::One(9), &mut buffer);
+        add_indices_triangular(0, 3, 6, Forward(&[1, 2]), Forward(&[4, 5]), Forward(&[7, 8]), &TriangleContents::One(9), &mut buffer);
 
         assert_eq!(buffer, &[
             0, 1, 8,
@@ -1059,9 +1082,9 @@ mod tests {
             0,
             4,
             8,
-            &[1, 2, 3],
-            &[5, 6, 7],
-            &[9, 10, 11],
+            Forward(&[1, 2, 3]),
+            Forward(&[5, 6, 7]),
+            Forward(&[9, 10, 11]),
             &TriangleContents::Three { a: 12, b: 13, c: 14 },
             &mut buffer
         );
