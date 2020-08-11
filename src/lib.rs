@@ -29,11 +29,7 @@ enum TriangleContents {
     ///
     /// Three points inside the triangle: subdivision 3
     ///
-    Three {
-        a: u32,
-        b: u32,
-        c: u32,
-    },
+    Three { a: u32, b: u32, c: u32 },
     ///
     /// Six points inside the triangle: subdivision 4
     ///
@@ -112,8 +108,8 @@ impl TriangleContents {
                     b: points.len() as u32 - 2,
                     c: points.len() as u32 - 1,
                 };
-            },
-            _ => panic!("Self is {:?} while it should be One", self)
+            }
+            _ => panic!("Self is {:?} while it should be One", self),
         }
     }
 
@@ -161,7 +157,7 @@ impl TriangleContents {
                     bc: points.len() as u32 - 2,
                     ca: points.len() as u32 - 1,
                 };
-            },
+            }
             _ => panic!("Found {:?} whereas a Three was expected", self),
         }
     }
@@ -169,7 +165,13 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>) {
+    pub fn subdivide(
+        &mut self,
+        ab: Slice<u32>,
+        bc: Slice<u32>,
+        ca: Slice<u32>,
+        points: &mut Vec<Vec3A>,
+    ) {
         use TriangleContents::*;
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), ca.len());
@@ -195,7 +197,7 @@ impl TriangleContents {
                     contents: Box::new(Self::none()),
                 };
                 self.subdivide(ab, bc, ca, points);
-            },
+            }
             &mut More {
                 a: a_idx,
                 b: b_idx,
@@ -227,9 +229,24 @@ impl TriangleContents {
                 let bc = &sides[side_length..side_length * 2];
                 let ca = &sides[side_length * 2..];
 
-                geometric_slerp_multiple(points[a_idx as usize], points[b_idx as usize], ab, points);
-                geometric_slerp_multiple(points[b_idx as usize], points[c_idx as usize], bc, points);
-                geometric_slerp_multiple(points[c_idx as usize], points[a_idx as usize], ca, points);
+                geometric_slerp_multiple(
+                    points[a_idx as usize],
+                    points[b_idx as usize],
+                    ab,
+                    points,
+                );
+                geometric_slerp_multiple(
+                    points[b_idx as usize],
+                    points[c_idx as usize],
+                    bc,
+                    points,
+                );
+                geometric_slerp_multiple(
+                    points[c_idx as usize],
+                    points[a_idx as usize],
+                    ca,
+                    points,
+                );
 
                 contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points);
             }
@@ -246,32 +263,25 @@ impl TriangleContents {
                 } else {
                     *x
                 }
-            },
-            Three {
-                a,
-                b,
-                ..
-            } => *[a, b][idx],
-            Six {
-                a,
-                b,
-                ab,
-                ..
-            } => *[a, ab, b][idx],
+            }
+            Three { a, b, .. } => *[a, b][idx],
+            Six { a, b, ab, .. } => *[a, ab, b][idx],
             &More {
                 a,
                 b,
                 ref sides,
                 my_side_length,
                 ..
-            } => {
-                 match idx {
-                     0 => a,
-                     x if (1..(my_side_length as usize + 1)).contains(&x) => sides[x - 1],
-                     x if x == my_side_length as usize + 1 => b,
-                     _ => panic!("Invalid Index, len is {}, but got {}", my_side_length + 2, idx),
-                 }
-            }
+            } => match idx {
+                0 => a,
+                x if (1..(my_side_length as usize + 1)).contains(&x) => sides[x - 1],
+                x if x == my_side_length as usize + 1 => b,
+                _ => panic!(
+                    "Invalid Index, len is {}, but got {}",
+                    my_side_length + 2,
+                    idx
+                ),
+            },
         }
     }
     pub fn idx_bc(&self, idx: usize) -> u32 {
@@ -284,32 +294,27 @@ impl TriangleContents {
                 } else {
                     *x
                 }
-            },
-            Three {
-                c,
-                b,
-                ..
-            } => *[b, c][idx],
-            Six {
-                b,
-                c,
-                bc,
-                ..
-            } => *[b, bc, c][idx],
+            }
+            Three { c, b, .. } => *[b, c][idx],
+            Six { b, c, bc, .. } => *[b, bc, c][idx],
             &More {
                 b,
                 c,
                 ref sides,
                 my_side_length,
                 ..
-            } => {
-                match idx {
-                    0 => b,
-                    x if (1..(my_side_length as usize + 1)).contains(&x) => sides[my_side_length as usize + (x - 1)],
-                    x if x == my_side_length as usize + 1 => c,
-                    _ => panic!("Invalid Index, len is {}, but got {}", my_side_length + 2, idx),
+            } => match idx {
+                0 => b,
+                x if (1..(my_side_length as usize + 1)).contains(&x) => {
+                    sides[my_side_length as usize + (x - 1)]
                 }
-            }
+                x if x == my_side_length as usize + 1 => c,
+                _ => panic!(
+                    "Invalid Index, len is {}, but got {}",
+                    my_side_length + 2,
+                    idx
+                ),
+            },
         }
     }
     pub fn idx_ca(&self, idx: usize) -> u32 {
@@ -322,44 +327,35 @@ impl TriangleContents {
                 } else {
                     *x
                 }
-            },
-            Three {
-                c,
-                a,
-                ..
-            } => *[c, a][idx],
-            Six {
-                c,
-                a,
-                ca,
-                ..
-            } => *[c, ca, a][idx],
+            }
+            Three { c, a, .. } => *[c, a][idx],
+            Six { c, a, ca, .. } => *[c, ca, a][idx],
             &More {
                 c,
                 a,
                 ref sides,
                 my_side_length,
                 ..
-            } => {
-                match idx {
-                    0 => c,
-                    x if (1..(my_side_length as usize + 1)).contains(&x) => sides[my_side_length as usize * 2 + x - 1],
-                    x if x == my_side_length as usize + 1 => a,
-                    _ => panic!("Invalid Index, len is {}, but got {}", my_side_length + 2, idx),
+            } => match idx {
+                0 => c,
+                x if (1..(my_side_length as usize + 1)).contains(&x) => {
+                    sides[my_side_length as usize * 2 + x - 1]
                 }
-            }
+                x if x == my_side_length as usize + 1 => a,
+                _ => panic!(
+                    "Invalid Index, len is {}, but got {}",
+                    my_side_length + 2,
+                    idx
+                ),
+            },
         }
     }
 
     pub fn add_indices(&self, buffer: &mut Vec<u32>) {
         use TriangleContents::*;
         match self {
-            None | One(_) => {},
-            &Three {
-                a,
-                b,
-                c,
-            } => buffer.extend_from_slice(&[a, b, c]),
+            None | One(_) => {}
+            &Three { a, b, c } => buffer.extend_from_slice(&[a, b, c]),
             &Six {
                 a,
                 b,
@@ -373,7 +369,7 @@ impl TriangleContents {
                 buffer.extend_from_slice(&[bc, c, ca]);
 
                 buffer.extend_from_slice(&[ab, bc, ca]);
-            },
+            }
             &More {
                 a,
                 b,
@@ -388,7 +384,16 @@ impl TriangleContents {
                 let ca = &sides[my_side_length * 2..];
 
                 // Contents are always stored forward.
-                add_indices_triangular(a, b, c, Forward(ab), Forward(bc), Forward(ca), &**contents, buffer);
+                add_indices_triangular(
+                    a,
+                    b,
+                    c,
+                    Forward(ab),
+                    Forward(bc),
+                    Forward(ca),
+                    &**contents,
+                    buffer,
+                );
                 contents.add_indices(buffer);
             }
         }
@@ -398,13 +403,13 @@ impl TriangleContents {
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 enum Slice<'a, T> {
     Forward(&'a [T]),
-    Backward(&'a [T])
+    Backward(&'a [T]),
 }
 
 impl<'a, T> Slice<'a, T> {
     fn len(&self) -> usize {
         match self {
-            &Forward(x) | &Backward(x) => x.len()
+            &Forward(x) | &Backward(x) => x.len(),
         }
     }
 }
@@ -415,7 +420,7 @@ impl<'a, T> Index<usize> for Slice<'a, T> {
     fn index(&self, idx: usize) -> &Self::Output {
         match self {
             Forward(x) => x.index(idx),
-            Backward(x) => x.index((x.len() - 1) - idx)
+            Backward(x) => x.index((x.len() - 1) - idx),
         }
     }
 }
@@ -452,18 +457,22 @@ impl Default for Triangle {
 }
 
 impl Triangle {
-    fn subdivide_edges<'a>(&'a mut self, edges: &mut [(Vec<u32>, bool); 30], points: &mut Vec<Vec3A>) -> usize {
-        let mut divide = |
-            p1: u32,
-            p2: u32,
-            edge_idx: usize,
-            forward: &mut bool,
-        | {
+    fn subdivide_edges<'a>(
+        &'a mut self,
+        edges: &mut [(Vec<u32>, bool); 30],
+        points: &mut Vec<Vec3A>,
+    ) -> usize {
+        let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
             if !edges[edge_idx].1 {
                 edges[edge_idx].0.push(points.len() as u32);
                 points.push(Vec3A::zero());
 
-                geometric_slerp_multiple(points[p1 as usize], points[p2 as usize], &edges[edge_idx].0, points);
+                geometric_slerp_multiple(
+                    points[p1 as usize],
+                    points[p2 as usize],
+                    &edges[edge_idx].0,
+                    points,
+                );
                 edges[edge_idx].1 = true;
                 *forward = true;
             } else {
@@ -560,27 +569,91 @@ impl<T> Hexasphere<T> {
                 // North Pole
                 Vec3A::new(0.0, 1.0, 0.0),
                 // Top Ring
-                Vec3A::new(0.89442719099991585541, 0.44721359549995792770, 0.00000000000000000000),
-                Vec3A::new(0.27639320225002106390, 0.44721359549995792770, 0.85065080835203987775),
-                Vec3A::new(-0.72360679774997882507, 0.44721359549995792770, 0.52573111211913370333),
-                Vec3A::new(-0.72360679774997904712, 0.44721359549995792770, -0.52573111211913348129),
-                Vec3A::new(0.27639320225002084186, 0.44721359549995792770, -0.85065080835203998877),
+                Vec3A::new(
+                    0.89442719099991585541,
+                    0.44721359549995792770,
+                    0.00000000000000000000,
+                ),
+                Vec3A::new(
+                    0.27639320225002106390,
+                    0.44721359549995792770,
+                    0.85065080835203987775,
+                ),
+                Vec3A::new(
+                    -0.72360679774997882507,
+                    0.44721359549995792770,
+                    0.52573111211913370333,
+                ),
+                Vec3A::new(
+                    -0.72360679774997904712,
+                    0.44721359549995792770,
+                    -0.52573111211913348129,
+                ),
+                Vec3A::new(
+                    0.27639320225002084186,
+                    0.44721359549995792770,
+                    -0.85065080835203998877,
+                ),
                 // Bottom Ring
-                Vec3A::new(0.72360679774997871405, -0.44721359549995792770, -0.52573111211913392538),
-                Vec3A::new(0.72360679774997904712, -0.44721359549995792770, 0.52573111211913337026),
-                Vec3A::new(-0.27639320225002073084, -0.44721359549995792770, 0.85065080835203998877),
-                Vec3A::new(-0.89442719099991585541, -0.44721359549995792770, 0.00000000000000032861),
-                Vec3A::new(-0.27639320225002139697, -0.44721359549995792770, -0.85065080835203976672),
+                Vec3A::new(
+                    0.72360679774997871405,
+                    -0.44721359549995792770,
+                    -0.52573111211913392538,
+                ),
+                Vec3A::new(
+                    0.72360679774997904712,
+                    -0.44721359549995792770,
+                    0.52573111211913337026,
+                ),
+                Vec3A::new(
+                    -0.27639320225002073084,
+                    -0.44721359549995792770,
+                    0.85065080835203998877,
+                ),
+                Vec3A::new(
+                    -0.89442719099991585541,
+                    -0.44721359549995792770,
+                    0.00000000000000032861,
+                ),
+                Vec3A::new(
+                    -0.27639320225002139697,
+                    -0.44721359549995792770,
+                    -0.85065080835203976672,
+                ),
                 // South Pole
                 Vec3A::new(0.0, -1.0, 0.0),
             ],
             shared_edges: [
-                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
-                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
-                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
-                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
-                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
-                (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true), (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
+                (Vec::new(), true),
             ],
             triangles: [
                 // Top
@@ -610,8 +683,8 @@ impl<T> Hexasphere<T> {
                     c: 3,
 
                     ab: 2,
-                    bc: 1,
-                    ca: 7,
+                    bc: 7,
+                    ca: 1,
                     ..Default::default()
                 }, //2
                 Triangle {
@@ -796,12 +869,7 @@ impl<T> Hexasphere<T> {
             this.subdivide();
         }
 
-        this.data = this
-            .points
-            .iter()
-            .copied()
-            .map(generator)
-            .collect();
+        this.data = this.points.iter().copied().map(generator).collect();
 
         this
     }
@@ -834,6 +902,72 @@ impl<T> Hexasphere<T> {
     pub fn raw_data(&self) -> &[T] {
         &self.data
     }
+
+    ///
+    /// Calculate the number of indices which each main
+    /// triangle will add to the vertex buffer.
+    ///
+    /// # Equation
+    ///
+    /// ```text
+    /// (subdivisions + 1)²
+    /// ```
+    ///
+    pub fn indices_per_main_triangle(&self) -> usize {
+        (self.subdivisions + 1) * (self.subdivisions + 1)
+    }
+
+    ///
+    /// Calculate the number of vertices contained within
+    /// each main triangle including the vertices which are
+    /// shared with another main triangle.
+    ///
+    /// # Equation
+    ///
+    /// ```text
+    /// (subdivisions + 1) * (subdivisions + 2) / 2
+    /// ```
+    ///
+    pub fn vertices_per_main_triangle_shared(&self) -> usize {
+        (self.subdivisions + 1) * (self.subdivisions + 2) / 2
+    }
+
+    ///
+    /// Calculate the number of vertices contained within each
+    /// main triangle excluding the ones that are shared with
+    /// other main triangles.
+    ///
+    /// # Equation
+    ///
+    /// ```text
+    /// {
+    /// { subdivisions < 2  : 0
+    /// {
+    /// { subdivisions >= 2 : (subdivisions - 1) * subdivisions / 2
+    /// {
+    /// ```
+    ///
+    pub fn vertices_per_main_triangle_unique(&self) -> usize {
+        if self.subdivisions < 2 {
+            return 0;
+        }
+        (self.subdivisions - 1) * self.subdivisions / 2
+    }
+
+    ///
+    /// Calculate the number of vertices along the edges
+    /// of the main triangles and the vertices of the main
+    /// triangles.
+    ///
+    /// # Equation
+    ///
+    /// ```text
+    /// subdivisions * 30 + 12
+    /// ```
+    ///
+    pub fn shared_vertices(&self) -> usize {
+        self.subdivisions * 30 + 12
+    }
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
@@ -862,11 +996,21 @@ fn geometric_slerp_multiple<'a>(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
     for (percent, index) in indices.iter().enumerate() {
         let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
 
-        points[*index as usize] = a * (((1.0 - percent) * angle).sin() * sin) + b * ((percent * angle).sin() * sin);
+        points[*index as usize] =
+            a * (((1.0 - percent) * angle).sin() * sin) + b * ((percent * angle).sin() * sin);
     }
 }
 
-fn add_indices_triangular(a: u32, b: u32, c: u32, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, contents: &TriangleContents, buffer: &mut Vec<u32>) {
+fn add_indices_triangular(
+    a: u32,
+    b: u32,
+    c: u32,
+    ab: Slice<u32>,
+    bc: Slice<u32>,
+    ca: Slice<u32>,
+    contents: &TriangleContents,
+    buffer: &mut Vec<u32>,
+) {
     let subdivisions = ab.len();
     if subdivisions == 0 {
         buffer.extend_from_slice(&[a, b, c]);
@@ -892,7 +1036,6 @@ fn add_indices_triangular(a: u32, b: u32, c: u32, ab: Slice<u32>, bc: Slice<u32>
         return;
     }
 
-
     let last_idx = ab.len() - 1;
 
     buffer.extend_from_slice(&[a, ab[0], ca[last_idx]]);
@@ -903,7 +1046,8 @@ fn add_indices_triangular(a: u32, b: u32, c: u32, ab: Slice<u32>, bc: Slice<u32>
     buffer.extend_from_slice(&[bc[0], contents.idx_bc(0), ab[last_idx]]);
     buffer.extend_from_slice(&[ca[0], contents.idx_ca(0), bc[last_idx]]);
 
-    for i in 0..last_idx - 1 { // Exclude special case: last_idx - 1.
+    for i in 0..last_idx - 1 {
+        // Exclude special case: last_idx - 1.
         // AB
         buffer.extend_from_slice(&[ab[i], ab[i + 1], contents.idx_ab(i)]);
         buffer.extend_from_slice(&[ab[i + 1], contents.idx_ab(i + 1), contents.idx_ab(i)]);
@@ -916,18 +1060,30 @@ fn add_indices_triangular(a: u32, b: u32, c: u32, ab: Slice<u32>, bc: Slice<u32>
     }
 
     // Deal with special case: last_idx - 1
-    buffer.extend_from_slice(&[ab[last_idx], contents.idx_ab(last_idx - 1), ab[last_idx - 1]]);
+    buffer.extend_from_slice(&[
+        ab[last_idx],
+        contents.idx_ab(last_idx - 1),
+        ab[last_idx - 1],
+    ]);
 
-    buffer.extend_from_slice(&[bc[last_idx], contents.idx_bc(last_idx - 1), bc[last_idx - 1]]);
+    buffer.extend_from_slice(&[
+        bc[last_idx],
+        contents.idx_bc(last_idx - 1),
+        bc[last_idx - 1],
+    ]);
 
-    buffer.extend_from_slice(&[ca[last_idx], contents.idx_ca(last_idx - 1), ca[last_idx - 1]]);
+    buffer.extend_from_slice(&[
+        ca[last_idx],
+        contents.idx_ca(last_idx - 1),
+        ca[last_idx - 1],
+    ]);
 }
 
 #[cfg(test)]
 mod tests {
-    use glam::Vec3A;
     use crate::Hexasphere;
     use crate::Slice::Forward;
+    use glam::Vec3A;
 
     // Starting points aren't _quite_ precise enough to use `f32::EPSILON`.
     const EPSILON: f32 = 0.0000002;
@@ -945,7 +1101,7 @@ mod tests {
         assert!((expected - result).length() <= EPSILON);
 
         // Another test case
-        let p1 = Vec3A::new(-0.24953852315,  0.0, 0.968364872073);
+        let p1 = Vec3A::new(-0.24953852315, 0.0, 0.968364872073);
         let p2 = Vec3A::new(-0.948416666565, 0.0, 0.317026539239);
 
         let expected = Vec3A::new(-0.681787771301, 0.0, 0.731550022148);
@@ -979,12 +1135,7 @@ mod tests {
             Vec3A::new(0.0925155945469, 0.0, -0.995711235633),
         ];
 
-        let mut result = [
-            Vec3A::zero(),
-            Vec3A::zero(),
-            Vec3A::zero(),
-            Vec3A::zero(),
-        ];
+        let mut result = [Vec3A::zero(), Vec3A::zero(), Vec3A::zero(), Vec3A::zero()];
 
         geometric_slerp_multiple(p1, p2, &[0, 1, 2, 3], &mut result);
 
@@ -1024,7 +1175,16 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        add_indices_triangular(0, 1, 2, Forward(&[]), Forward(&[]), Forward(&[]), &TriangleContents::none(), &mut buffer);
+        add_indices_triangular(
+            0,
+            1,
+            2,
+            Forward(&[]),
+            Forward(&[]),
+            Forward(&[]),
+            &TriangleContents::none(),
+            &mut buffer,
+        );
 
         assert_eq!(buffer, &[0, 1, 2]);
     }
@@ -1036,14 +1196,18 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        add_indices_triangular(0, 1, 2, Forward(&[3]), Forward(&[4]), Forward(&[5]), &TriangleContents::none(), &mut buffer);
+        add_indices_triangular(
+            0,
+            1,
+            2,
+            Forward(&[3]),
+            Forward(&[4]),
+            Forward(&[5]),
+            &TriangleContents::none(),
+            &mut buffer,
+        );
 
-        assert_eq!(buffer, &[
-            0, 3, 5,
-            1, 4, 3,
-            2, 5, 4,
-            3, 4, 5,
-        ]);
+        assert_eq!(buffer, &[0, 3, 5, 1, 4, 3, 2, 5, 4, 3, 4, 5,]);
     }
 
     #[test]
@@ -1053,21 +1217,21 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        add_indices_triangular(0, 3, 6, Forward(&[1, 2]), Forward(&[4, 5]), Forward(&[7, 8]), &TriangleContents::One(9), &mut buffer);
+        add_indices_triangular(
+            0,
+            3,
+            6,
+            Forward(&[1, 2]),
+            Forward(&[4, 5]),
+            Forward(&[7, 8]),
+            &TriangleContents::One(9),
+            &mut buffer,
+        );
 
-        assert_eq!(buffer, &[
-            0, 1, 8,
-            3, 4, 2,
-            6, 7, 5,
-
-            2, 9, 1,
-            5, 9, 4,
-            8, 9, 7,
-
-            1, 9, 8,
-            4, 9, 2,
-            7, 9, 5,
-        ]);
+        assert_eq!(
+            buffer,
+            &[0, 1, 8, 3, 4, 2, 6, 7, 5, 2, 9, 1, 5, 9, 4, 8, 9, 7, 1, 9, 8, 4, 9, 2, 7, 9, 5,]
+        );
     }
 
     // Really, we're testing for the rest.
@@ -1085,32 +1249,21 @@ mod tests {
             Forward(&[1, 2, 3]),
             Forward(&[5, 6, 7]),
             Forward(&[9, 10, 11]),
-            &TriangleContents::Three { a: 12, b: 13, c: 14 },
-            &mut buffer
+            &TriangleContents::Three {
+                a: 12,
+                b: 13,
+                c: 14,
+            },
+            &mut buffer,
         );
 
-        assert_eq!(buffer, &[
-            0, 1, 11,
-            4, 5, 3,
-            8, 9, 7,
-
-            1, 12, 11,
-            5, 13, 3,
-            9, 14, 7,
-
-            1, 2, 12,
-            2, 13, 12,
-
-            5, 6, 13,
-            6, 14, 13,
-
-            9, 10, 14,
-            10, 12, 14,
-
-            3, 13, 2,
-            7, 14, 6,
-            11, 12, 10,
-        ][..]);
+        assert_eq!(
+            buffer,
+            &[
+                0, 1, 11, 4, 5, 3, 8, 9, 7, 1, 12, 11, 5, 13, 3, 9, 14, 7, 1, 2, 12, 2, 13, 12, 5,
+                6, 13, 6, 14, 13, 9, 10, 14, 10, 12, 14, 3, 13, 2, 7, 14, 6, 11, 12, 10,
+            ][..]
+        );
     }
 
     #[test]
