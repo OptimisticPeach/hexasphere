@@ -55,7 +55,9 @@ enum TriangleContents {
         ///
         /// Contents of the inner triangle.
         ///
-        // TODO: Make `Triangle` contain a `Vec<TriangleContents>`.
+        // Implementing this as a `Vec<TriangleContents>` would
+        // probably be a perf. improvement someday, however not
+        // something worth implementing right now.
         contents: Box<TriangleContents>,
     },
 }
@@ -71,20 +73,24 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>) -> Self {
+    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
         let p2 = points[bc[1] as usize];
         let index = points.len() as u32;
-        points.push(geometric_slerp_half(p1, p2));
+        if calculate {
+            points.push(geometric_slerp_half(p1, p2));
+        } else {
+            points.push(Vec3A::zero());
+        }
         TriangleContents::One(index)
     }
 
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>) {
+    fn three(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -97,12 +103,17 @@ impl TriangleContents {
                 let bc = points[bc[1] as usize];
                 let ca = points[ca[1] as usize];
 
-                let a = geometric_slerp_half(ab, ca);
-                let b = geometric_slerp_half(bc, ab);
-                let c = geometric_slerp_half(ca, bc);
+                if calculate {
+                    let a = geometric_slerp_half(ab, ca);
+                    let b = geometric_slerp_half(bc, ab);
+                    let c = geometric_slerp_half(ca, bc);
 
-                points.extend_from_slice(&[b, c]);
-                points[x as usize] = a;
+                    points.extend_from_slice(&[b, c]);
+                    points[x as usize] = a;
+                } else {
+                    points.extend_from_slice(&[Vec3A::zero(), Vec3A::zero()])
+                }
+
                 *self = Three {
                     a: x,
                     b: points.len() as u32 - 2,
@@ -116,7 +127,7 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>) {
+    fn six(&mut self, ab: Slice<u32>, bc: Slice<u32>, ca: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool) {
         use TriangleContents::*;
 
         assert_eq!(ab.len(), bc.len());
@@ -136,18 +147,22 @@ impl TriangleContents {
                 let cac = points[ca[1] as usize];
                 let caa = points[ca[2] as usize];
 
-                let a = geometric_slerp_half(aba, caa);
-                let b = geometric_slerp_half(abb, bcb);
-                let c = geometric_slerp_half(bcc, cac);
+                if calculate {
+                    let a = geometric_slerp_half(aba, caa);
+                    let b = geometric_slerp_half(abb, bcb);
+                    let c = geometric_slerp_half(bcc, cac);
 
-                let ab = geometric_slerp_half(a, b);
-                let bc = geometric_slerp_half(b, c);
-                let ca = geometric_slerp_half(c, a);
+                    let ab = geometric_slerp_half(a, b);
+                    let bc = geometric_slerp_half(b, c);
+                    let ca = geometric_slerp_half(c, a);
 
-                points[a_index as usize] = a;
-                points[b_index as usize] = b;
-                points[c_index as usize] = c;
-                points.extend_from_slice(&[ab, bc, ca]);
+                    points[a_index as usize] = a;
+                    points[b_index as usize] = b;
+                    points[c_index as usize] = c;
+                    points.extend_from_slice(&[ab, bc, ca]);
+                } else {
+                    points.extend_from_slice(&[Vec3A::zero(), Vec3A::zero(), Vec3A::zero()])
+                }
 
                 *self = Six {
                     a: a_index,
@@ -171,15 +186,16 @@ impl TriangleContents {
         bc: Slice<u32>,
         ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
+        calculate: bool,
     ) {
         use TriangleContents::*;
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), ca.len());
         assert!(ab.len() >= 2);
         match self {
-            None => *self = Self::one(ab, bc, points),
-            One(_) => self.three(ab, bc, ca, points),
-            Three { .. } => self.six(ab, bc, ca, points),
+            None => *self = Self::one(ab, bc, points, calculate),
+            One(_) => self.three(ab, bc, ca, points, calculate),
+            Three { .. } => self.six(ab, bc, ca, points, calculate),
             &mut Six {
                 a,
                 b,
@@ -196,7 +212,7 @@ impl TriangleContents {
                     my_side_length: 1,
                     contents: Box::new(Self::none()),
                 };
-                self.subdivide(ab, bc, ca, points);
+                self.subdivide(ab, bc, ca, points, calculate);
             }
             &mut More {
                 a: a_idx,
@@ -221,34 +237,38 @@ impl TriangleContents {
                 let cac = points[ca[1] as usize];
                 let caa = points[ca[outer_len - 2] as usize];
 
-                points[a_idx as usize] = geometric_slerp_half(aba, caa);
-                points[b_idx as usize] = geometric_slerp_half(abb, bcb);
-                points[c_idx as usize] = geometric_slerp_half(bcc, cac);
+                if calculate {
+                    points[a_idx as usize] = geometric_slerp_half(aba, caa);
+                    points[b_idx as usize] = geometric_slerp_half(abb, bcb);
+                    points[c_idx as usize] = geometric_slerp_half(bcc, cac);
+                }
 
                 let ab = &sides[0..side_length];
                 let bc = &sides[side_length..side_length * 2];
                 let ca = &sides[side_length * 2..];
 
-                geometric_slerp_multiple(
-                    points[a_idx as usize],
-                    points[b_idx as usize],
-                    ab,
-                    points,
-                );
-                geometric_slerp_multiple(
-                    points[b_idx as usize],
-                    points[c_idx as usize],
-                    bc,
-                    points,
-                );
-                geometric_slerp_multiple(
-                    points[c_idx as usize],
-                    points[a_idx as usize],
-                    ca,
-                    points,
-                );
+                if calculate {
+                    geometric_slerp_multiple(
+                        points[a_idx as usize],
+                        points[b_idx as usize],
+                        ab,
+                        points,
+                    );
+                    geometric_slerp_multiple(
+                        points[b_idx as usize],
+                        points[c_idx as usize],
+                        bc,
+                        points,
+                    );
+                    geometric_slerp_multiple(
+                        points[c_idx as usize],
+                        points[a_idx as usize],
+                        ca,
+                        points,
+                    );
+                }
 
-                contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points);
+                contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points, calculate);
             }
         }
     }
@@ -461,18 +481,22 @@ impl Triangle {
         &'a mut self,
         edges: &mut [(Vec<u32>, bool); 30],
         points: &mut Vec<Vec3A>,
+        calculate: bool
     ) -> usize {
         let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
             if !edges[edge_idx].1 {
                 edges[edge_idx].0.push(points.len() as u32);
                 points.push(Vec3A::zero());
 
-                geometric_slerp_multiple(
-                    points[p1 as usize],
-                    points[p2 as usize],
-                    &edges[edge_idx].0,
-                    points,
-                );
+                if calculate {
+                    geometric_slerp_multiple(
+                        points[p1 as usize],
+                        points[p2 as usize],
+                        &edges[edge_idx].0,
+                        points,
+                    );
+                }
+
                 edges[edge_idx].1 = true;
                 *forward = true;
             } else {
@@ -487,8 +511,8 @@ impl Triangle {
         edges[self.ab].0.len()
     }
 
-    pub fn subdivide(&mut self, edges: &mut [(Vec<u32>, bool); 30], points: &mut Vec<Vec3A>) {
-        let side_length = self.subdivide_edges(edges, points) + 1;
+    pub fn subdivide(&mut self, edges: &mut [(Vec<u32>, bool); 30], points: &mut Vec<Vec3A>, calculate: bool) {
+        let side_length = self.subdivide_edges(edges, points, calculate) + 1;
 
         if side_length > 2 {
             let ab = if self.ab_forward {
@@ -506,7 +530,7 @@ impl Triangle {
             } else {
                 Backward(&edges[self.ca].0)
             };
-            self.contents.subdivide(ab, bc, ca, points);
+            self.contents.subdivide(ab, bc, ca, points, calculate);
         }
     }
 
@@ -613,7 +637,7 @@ impl<T> Hexasphere<T> {
                 Vec3A::new(
                     -0.89442719099991585541,
                     -0.44721359549995792770,
-                    0.00000000000000032861,
+                    0.00000000000000000000,
                 ),
                 Vec3A::new(
                     -0.27639320225002139697,
@@ -865,8 +889,16 @@ impl<T> Hexasphere<T> {
             data: vec![],
         };
 
-        for _ in 0..subdivisions {
-            this.subdivide();
+        match subdivisions {
+            0 => {},
+            1 => this.subdivide(true),
+            x => {
+                for _ in 0..x - 1 {
+                    this.subdivide(false);
+                }
+
+                this.subdivide(true);
+            }
         }
 
         this.data = this.points.iter().copied().map(generator).collect();
@@ -874,13 +906,18 @@ impl<T> Hexasphere<T> {
         this
     }
 
-    fn subdivide(&mut self) {
+    ///
+    /// Subdivides all triangles. `calculate` signals whether or not
+    /// to recalculate vertices (To not calculate vertices between many
+    /// subdivisions)
+    ///
+    fn subdivide(&mut self, calculate: bool) {
         for (_, done) in &mut self.shared_edges {
             *done = false;
         }
 
         for triangle in &mut self.triangles {
-            triangle.subdivide(&mut self.shared_edges, &mut self.points);
+            triangle.subdivide(&mut self.shared_edges, &mut self.points, calculate);
         }
     }
 
@@ -967,6 +1004,20 @@ impl<T> Hexasphere<T> {
     ///
     pub fn shared_vertices(&self) -> usize {
         self.subdivisions * 30 + 12
+    }
+
+    ///
+    /// Calculate distance from the center of a shape (pentagon or hexagon)
+    /// to one of the vertices of the shape.
+    ///
+    /// In other words, the radius of the circumscribed circle.
+    ///
+    pub fn radius_shapes(&self) -> f32 {
+        let subdivisions = self.subdivisions as f32 + 1.0;
+        const DEFAULT_ANGLE: f32 = 1.10714871779409085306;
+        let angle = DEFAULT_ANGLE / subdivisions;
+
+        (angle * 0.5).sin() * 2.0
     }
 }
 
