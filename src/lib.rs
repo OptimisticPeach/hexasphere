@@ -9,6 +9,9 @@ use std::ops::Index;
 
 use Slice::*;
 
+#[cfg(feature = "adjacency")]
+pub use adjacency::*;
+
 ///
 /// Contents of one of the main triangular faces.
 ///
@@ -1019,6 +1022,20 @@ impl<T> Hexasphere<T> {
 
         (angle * 0.5).sin() * 2.0
     }
+
+    ///
+    /// Distance between two points on this sphere.
+    ///
+    pub fn spherical_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
+        self.points[p1 as usize].dot(self.points[p2 as usize]).acos() * radius
+    }
+
+    ///
+    /// Linear distance between two points on this sphere.
+    ///
+    pub fn linear_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
+        (self.points[p1 as usize] - self.points[p2 as usize]).length() * radius
+    }
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
@@ -1128,6 +1145,58 @@ fn add_indices_triangular(
         contents.idx_ca(last_idx - 1),
         ca[last_idx - 1],
     ]);
+}
+
+#[cfg(feature = "adjacency")]
+mod adjacency {
+    use std::collections::HashMap;
+    use smallvec::SmallVec;
+
+    #[derive(Default, Clone, Debug)]
+    pub struct AdjacentStore {
+        pub(crate) subdivisions: usize,
+        pub(crate) map: HashMap<u32, SmallVec<[u32; 6]>>,
+    }
+
+    impl AdjacentStore {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        pub fn neighbours(&self, id: u32) -> Option<&[u32]> {
+            self.map.get(&id).map(|x| &**x)
+        }
+
+        pub fn from_indices(indices: &[u32]) -> Self {
+            let mut this = Self::new();
+            this.add_triangle_indices(indices);
+            this
+        }
+
+        pub fn add_triangle_indices(&mut self, triangles: &[u32]) {
+            assert_eq!(triangles.len() % 3, 0);
+
+            for triangle in triangles.chunks(3) {
+                self.add_triangle([triangle[0], triangle[1], triangle[2]]);
+            }
+        }
+
+        fn add_triangle(&mut self, [a, b, c]: [u32; 3]) {
+            let mut add_triangle = |a, b, c| {
+                let vec = self.map.entry(a).or_insert_with(SmallVec::new);
+                if !vec.contains(&b) {
+                    vec.push(b);
+                }
+                if !vec.contains(&c) {
+                    vec.push(c);
+                }
+            };
+
+            add_triangle(a, b, c);
+            add_triangle(b, c, a);
+            add_triangle(c, a, b);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1323,6 +1392,64 @@ mod tests {
 
         for i in sphere.raw_points() {
             assert!(i.length() - 1.0 <= EPSILON);
+        }
+    }
+
+    #[cfg(feature = "adjacency")]
+    mod adjacency {
+        use crate::{Hexasphere, AdjacentStore};
+
+        #[test]
+        fn creation() {
+            let sphere = Hexasphere::new(0, |_| ());
+
+            let mut indices = Vec::new();
+
+            for i in 0..20 {
+                sphere.get_indices(i, &mut indices);
+            }
+
+            let _ = AdjacentStore::from_indices(&indices);
+        }
+
+        #[test]
+        fn correct_indices() {
+            let sphere = Hexasphere::new(0, |_| ());
+
+            let mut indices = Vec::new();
+
+            for i in 0..20 {
+                sphere.get_indices(i, &mut indices);
+            }
+
+            let store = AdjacentStore::from_indices(&indices);
+
+            const REFERENCE_DATA: [[u32; 5]; 12] = [
+                [1, 2, 3, 4, 5],
+                [0, 2, 7, 6, 5],
+                [0, 1, 3, 8, 7],
+                [0, 4, 2, 9, 8],
+                [0, 5, 10, 9, 3],
+                [0, 1, 6, 10, 4],
+                [5, 1, 7, 11, 10],
+                [1, 2, 8, 11, 6],
+                [2, 3, 9, 11, 7],
+                [3, 4, 10, 11, 8],
+                [4, 5, 6, 11, 9],
+                [6, 7, 8, 9, 10],
+            ];
+
+            for i in 0..12 {
+                let expected = REFERENCE_DATA[i as usize];
+                let actual = store.neighbours(i).unwrap();
+                assert_eq!(actual.len(), 5);
+                let mut values = [0; 5];
+                for (x, i) in actual.iter().enumerate() {
+                    assert!(expected.contains(i));
+                    values[x] += 1;
+                }
+                assert_eq!(values, [1; 5]);
+            }
         }
     }
 }

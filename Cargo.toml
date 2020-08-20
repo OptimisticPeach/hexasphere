@@ -14,5 +14,10 @@ categories = ["algorithms", "data-structures", "graphics", "mathematics", "rende
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+adjacency = ["smallvec"]
+
 [dependencies]
 glam = "0.9"
+
+smallvec = { version = "1.4.2", optional = true }
