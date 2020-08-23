@@ -50,7 +50,7 @@ impl BaseShape for IcoSphereBase {
     fn triangles() -> &'static [Triangle] {
         &consts::icosphere::TRIANGLES
     }
-    const EDGES: usize = 30;
+    const EDGES: usize = consts::icosphere::EDGES;
 
     #[inline]
     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
@@ -94,7 +94,7 @@ impl BaseShape for TetraSphereBase {
     fn triangles() -> &'static [Triangle] {
         &consts::tetrasphere::TRIANGLES
     }
-    const EDGES: usize = 6;
+    const EDGES: usize = consts::tetrasphere::EDGES;
 
     #[inline]
     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
@@ -125,6 +125,50 @@ impl EquilateralBaseShape for TetraSphereBase {
 }
 
 pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
+
+pub struct TriangleBase;
+
+impl BaseShape for TriangleBase {
+    #[inline]
+    fn initial_points() -> &'static [Vec3A] {
+        &*consts::triangle::INITIAL_POINTS
+    }
+
+    #[inline]
+    fn triangles() -> &'static [Triangle] {
+        core::slice::from_ref(&consts::triangle::TRIANGLE)
+    }
+    const EDGES: usize = consts::triangle::EDGES;
+
+    #[inline]
+    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        lerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+        lerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        lerp_multiple(a, b, indices, points);
+    }
+}
+
+impl EquilateralBaseShape for TriangleBase {
+    #[inline]
+    fn triangle_normals() -> &'static [Vec3A] {
+        core::slice::from_ref(&*consts::triangle::TRIANGLE_NORMAL)
+    }
+
+    #[inline]
+    fn triangle_min_dot() -> f32 {
+        -1.0
+    }
+}
+
+pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 
 struct Edge {
     points: Vec<u32>,
@@ -1396,6 +1440,36 @@ mod tests {
 }
 
 mod consts {
+    pub mod triangle {
+        use crate::{Triangle, TriangleContents};
+        use glam::Vec3A;
+
+        lazy_static::lazy_static! {
+            pub(crate) static ref INITIAL_POINTS: [Vec3A; 3] = [
+                Vec3A::new(-3.0f32.sqrt() / 2.0, 0.0, -0.5),
+                Vec3A::new( 3.0f32.sqrt() / 2.0, 0.0, -0.5),
+                Vec3A::new(0.0, 0.0, 1.0),
+            ];
+
+            pub(crate) static ref TRIANGLE_NORMAL: Vec3A = Vec3A::new(0.0, 1.0, 0.0);
+        }
+
+        pub(crate) const TRIANGLE: Triangle = Triangle {
+            a: 2,
+            b: 1,
+            c: 0,
+
+            ab_edge: 0,
+            bc_edge: 1,
+            ca_edge: 2,
+            ab_forward: true,
+            bc_forward: true,
+            ca_forward: true,
+            contents: TriangleContents::None,
+        };
+
+        pub(crate) const EDGES: usize = 3;
+    }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
@@ -1483,6 +1557,7 @@ mod consts {
 
             }
         ];
+        pub(crate) const EDGES: usize = 6;
     }
     pub mod icosphere {
         use crate::{Triangle, TriangleContents};
@@ -1865,5 +1940,7 @@ mod consts {
                 contents: TriangleContents::None,
             }, //19
         ];
+
+        pub(crate) const EDGES: usize = 30;
     }
 }
