@@ -16,12 +16,6 @@ pub use adjacency::*;
 pub trait BaseShape {
     fn initial_points() -> &'static [Vec3A];
     fn triangles() -> &'static [Triangle];
-    fn triangle_normals() -> Option<&'static [Vec3A]> {
-        None
-    }
-    fn triangle_min_dot() -> Option<&'static f32> {
-        None
-    }
     const EDGES: usize;
 
     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
@@ -39,20 +33,22 @@ pub trait BaseShape {
     }
 }
 
-pub struct IcoSphere;
+pub trait EquilateralBaseShape: BaseShape {
+    fn triangle_normals() -> &'static [Vec3A];
+    fn triangle_min_dot() -> f32;
+}
 
-impl BaseShape for IcoSphere {
+pub struct IcoSphereBase;
+
+impl BaseShape for IcoSphereBase {
+    #[inline]
     fn initial_points() -> &'static [Vec3A] {
-        &*consts::INITIAL_POINTS
+        &*consts::icosphere::INITIAL_POINTS
     }
+
+    #[inline]
     fn triangles() -> &'static [Triangle] {
-        &consts::TRIANGLES
-    }
-    fn triangle_normals() -> Option<&'static [Vec3A]> {
-        Some(&*consts::TRIANGLE_NORMALS)
-    }
-    fn triangle_min_dot() -> Option<&'static f32> {
-        Some(&*consts::MIN_NORMAL_DOT)
+        &consts::icosphere::TRIANGLES
     }
     const EDGES: usize = 30;
 
@@ -72,7 +68,63 @@ impl BaseShape for IcoSphere {
     }
 }
 
-pub type Hexasphere<T> = Subdivided<T, IcoSphere>;
+impl EquilateralBaseShape for IcoSphereBase {
+    #[inline]
+    fn triangle_normals() -> &'static [Vec3A] {
+        &*consts::icosphere::TRIANGLE_NORMALS
+    }
+
+    #[inline]
+    fn triangle_min_dot() -> f32 {
+        *consts::icosphere::MIN_NORMAL_DOT
+    }
+}
+
+pub type Hexasphere<T> = Subdivided<T, IcoSphereBase>;
+
+pub struct TetraSphereBase;
+
+impl BaseShape for TetraSphereBase {
+    #[inline]
+    fn initial_points() -> &'static [Vec3A] {
+        &*consts::tetrasphere::INITIAL_POINTS
+    }
+
+    #[inline]
+    fn triangles() -> &'static [Triangle] {
+        &consts::tetrasphere::TRIANGLES
+    }
+    const EDGES: usize = 6;
+
+    #[inline]
+    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        geometric_slerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+        geometric_slerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        geometric_slerp_multiple(a, b, indices, points);
+    }
+}
+
+impl EquilateralBaseShape for TetraSphereBase {
+    #[inline]
+    fn triangle_normals() -> &'static [Vec3A] {
+        &*consts::tetrasphere::TRIANGLE_NORMALS
+    }
+
+    #[inline]
+    fn triangle_min_dot() -> f32 {
+        *consts::tetrasphere::MIN_NORMAL_DOT
+    }
+}
+
+pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
 
 struct Edge {
     points: Vec<u32>,
@@ -831,17 +883,41 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Calculate distance from the center of a shape (pentagon or hexagon)
-    /// to one of the vertices of the shape.
+    /// Linear distance between two points on this sphere.
     ///
-    /// In other words, the radius of the circumscribed circle.
-    ///
-    pub fn radius_shapes(&self) -> f32 {
-        let subdivisions = self.subdivisions as f32 + 1.0;
-        const DEFAULT_ANGLE: f32 = 1.10714871779409085306;
-        let angle = DEFAULT_ANGLE / subdivisions;
+    pub fn linear_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
+        (self.points[p1 as usize] - self.points[p2 as usize]).length() * radius
+    }
+}
 
-        (angle * 0.5).sin() * 2.0
+impl<T, S: BaseShape + EquilateralBaseShape> Subdivided<T, S> {
+    ///
+    /// Closest "main" triangle.
+    ///
+    /// Undefined results if the point is one of the vertices
+    /// on the original icosahedron.
+    ///
+    pub fn main_triangle_intersect(point: Vec3A) -> usize {
+        let point = point.normalize();
+        let mut nearest = 0;
+        let mut near_factor = point.dot(S::triangle_normals()[0]);
+
+        if near_factor > S::triangle_min_dot() {
+            return 0;
+        }
+
+        for (index, normal) in S::triangle_normals().iter().enumerate().skip(1) {
+            let factor = normal.dot(point);
+            if factor > near_factor {
+                if factor > S::triangle_min_dot() {
+                    return index;
+                }
+                nearest = index;
+                near_factor = factor;
+            }
+        }
+
+        nearest
     }
 
     ///
@@ -853,41 +929,21 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             .acos()
             * radius
     }
+}
 
+impl<T> Hexasphere<T> {
     ///
-    /// Linear distance between two points on this sphere.
+    /// Calculate distance from the center of a shape (pentagon or hexagon)
+    /// to one of the vertices of the shape.
     ///
-    pub fn linear_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
-        (self.points[p1 as usize] - self.points[p2 as usize]).length() * radius
-    }
+    /// In other words, the radius of the circumscribed circle.
+    ///
+    pub fn radius_shapes(&self) -> f32 {
+        let subdivisions = self.subdivisions as f32 + 1.0;
+        const DEFAULT_ANGLE: f32 = 1.10714871779409085306;
+        let angle = DEFAULT_ANGLE / subdivisions;
 
-    ///
-    /// Closest "main" triangle.
-    ///
-    /// Undefined results if the point is one of the vertices
-    /// on the original icosahedron.
-    ///
-    pub fn main_triangle_intersect(point: Vec3A) -> usize {
-        let point = point.normalize();
-        let mut nearest = 0;
-        let mut near_factor = point.dot(consts::TRIANGLE_NORMALS[0]);
-
-        if near_factor > *consts::MIN_NORMAL_DOT {
-            return 0;
-        }
-
-        for (index, normal) in consts::TRIANGLE_NORMALS.iter().enumerate().skip(1) {
-            let factor = normal.dot(point);
-            if factor > near_factor {
-                if factor > *consts::MIN_NORMAL_DOT {
-                    return index;
-                }
-                nearest = index;
-                near_factor = factor;
-            }
-        }
-
-        nearest
+        (angle * 0.5).sin() * 2.0
     }
 }
 
@@ -1340,383 +1396,474 @@ mod tests {
 }
 
 mod consts {
-    use crate::{Triangle, TriangleContents};
-    use glam::Vec3A;
-    lazy_static::lazy_static! {
-        pub(crate) static ref INITIAL_POINTS: [Vec3A; 12] = [
-            Vec3A::from(RAW_POINTS[0]),
-            Vec3A::from(RAW_POINTS[1]),
-            Vec3A::from(RAW_POINTS[2]),
-            Vec3A::from(RAW_POINTS[3]),
-            Vec3A::from(RAW_POINTS[4]),
-            Vec3A::from(RAW_POINTS[5]),
-            Vec3A::from(RAW_POINTS[6]),
-            Vec3A::from(RAW_POINTS[7]),
-            Vec3A::from(RAW_POINTS[8]),
-            Vec3A::from(RAW_POINTS[9]),
-            Vec3A::from(RAW_POINTS[10]),
-            Vec3A::from(RAW_POINTS[11]),
+    pub mod tetrasphere {
+        use crate::{Triangle, TriangleContents};
+        use glam::Vec3A;
+
+        lazy_static::lazy_static! {
+            pub(crate) static ref INITIAL_POINTS: [Vec3A; 4] = [
+                Vec3A::new((8.0f32).sqrt() / 3.0, -1.0 / 3.0, 0.0),
+                Vec3A::new(-(2.0f32).sqrt() / 3.0, -1.0 / 3.0, (2.0f32 / 3.0).sqrt()),
+                Vec3A::new(-(2.0f32).sqrt() / 3.0, -1.0 / 3.0, -(2.0f32 / 3.0).sqrt()),
+                Vec3A::new(0.0, 1.0, 0.0),
+            ];
+
+            pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 4] = {
+                fn normal(triangle: usize) -> Vec3A {
+                    (
+                        INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
+                        INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
+                        INITIAL_POINTS[TRIANGLES[triangle].c as usize]
+                    ) / 3.0
+                }
+
+                [
+                    normal(0),
+                    normal(1),
+                    normal(2),
+                    normal(3),
+                ]
+            };
+
+            pub(crate) static ref MIN_NORMAL_DOT: f32 = 7.0f32.sqrt() / 3.0;
+        }
+
+        pub(crate) const TRIANGLES: [Triangle; 4] = [
+            Triangle {
+                a: 0,
+                b: 1,
+                c: 3,
+
+                ab_edge: 0,
+                bc_edge: 4,
+                ca_edge: 3,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 1,
+                b: 2,
+                c: 3,
+
+                ab_edge: 1,
+                bc_edge: 5,
+                ca_edge: 4,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 2,
+                b: 0,
+                c: 3,
+
+                ab_edge: 2,
+                bc_edge: 3,
+                ca_edge: 5,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 0,
+                b: 2,
+                c: 1,
+
+                ab_edge: 2,
+                bc_edge: 1,
+                ca_edge: 0,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+
+            }
+        ];
+    }
+    pub mod icosphere {
+        use crate::{Triangle, TriangleContents};
+        use glam::Vec3A;
+
+        lazy_static::lazy_static! {
+            pub(crate) static ref INITIAL_POINTS: [Vec3A; 12] = [
+                Vec3A::from(RAW_POINTS[0]),
+                Vec3A::from(RAW_POINTS[1]),
+                Vec3A::from(RAW_POINTS[2]),
+                Vec3A::from(RAW_POINTS[3]),
+                Vec3A::from(RAW_POINTS[4]),
+                Vec3A::from(RAW_POINTS[5]),
+                Vec3A::from(RAW_POINTS[6]),
+                Vec3A::from(RAW_POINTS[7]),
+                Vec3A::from(RAW_POINTS[8]),
+                Vec3A::from(RAW_POINTS[9]),
+                Vec3A::from(RAW_POINTS[10]),
+                Vec3A::from(RAW_POINTS[11]),
+            ];
+
+            pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 20] = {
+                fn normal(triangle: usize) -> Vec3A {
+                    (
+                        INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
+                        INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
+                        INITIAL_POINTS[TRIANGLES[triangle].c as usize]
+                    ) / 3.0
+                }
+
+                [
+                    normal(0),
+                    normal(1),
+                    normal(2),
+                    normal(3),
+                    normal(4),
+                    normal(5),
+                    normal(6),
+                    normal(7),
+                    normal(8),
+                    normal(9),
+                    normal(10),
+                    normal(11),
+                    normal(12),
+                    normal(13),
+                    normal(14),
+                    normal(15),
+                    normal(16),
+                    normal(17),
+                    normal(18),
+                    normal(19),
+                ]
+            };
+
+            pub(crate) static ref MIN_NORMAL_DOT: f32 = ((1.0f32 / 30.0) * (25.0 + 5.0_f32.sqrt())).sqrt();
+        }
+
+        const RAW_POINTS: [[f32; 3]; 12] = [
+            // North Pole
+            [0.0, 1.0, 0.0],
+            // Top Ring
+            [
+                0.89442719099991585541,
+                0.44721359549995792770,
+                0.00000000000000000000,
+            ],
+            [
+                0.27639320225002106390,
+                0.44721359549995792770,
+                0.85065080835203987775,
+            ],
+            [
+                -0.72360679774997882507,
+                0.44721359549995792770,
+                0.52573111211913370333,
+            ],
+            [
+                -0.72360679774997904712,
+                0.44721359549995792770,
+                -0.52573111211913348129,
+            ],
+            [
+                0.27639320225002084186,
+                0.44721359549995792770,
+                -0.85065080835203998877,
+            ],
+            // Bottom Ring
+            [
+                0.72360679774997871405,
+                -0.44721359549995792770,
+                -0.52573111211913392538,
+            ],
+            [
+                0.72360679774997904712,
+                -0.44721359549995792770,
+                0.52573111211913337026,
+            ],
+            [
+                -0.27639320225002073084,
+                -0.44721359549995792770,
+                0.85065080835203998877,
+            ],
+            [
+                -0.89442719099991585541,
+                -0.44721359549995792770,
+                0.00000000000000000000,
+            ],
+            [
+                -0.27639320225002139697,
+                -0.44721359549995792770,
+                -0.85065080835203976672,
+            ],
+            // South Pole
+            [0.0, -1.0, 0.0],
         ];
 
-        pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 20] = {
-            fn normal(triangle: usize) -> Vec3A {
-                (
-                    INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
-                    INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
-                    INITIAL_POINTS[TRIANGLES[triangle].c as usize]
-                ) / 3.0
-            }
+        pub(crate) const TRIANGLES: [Triangle; 20] = [
+            // Top
+            Triangle {
+                a: 0,
+                b: 2,
+                c: 1,
 
-            [
-                normal(0),
-                normal(1),
-                normal(2),
-                normal(3),
-                normal(4),
-                normal(5),
-                normal(6),
-                normal(7),
-                normal(8),
-                normal(9),
-                normal(10),
-                normal(11),
-                normal(12),
-                normal(13),
-                normal(14),
-                normal(15),
-                normal(16),
-                normal(17),
-                normal(18),
-                normal(19),
-            ]
-        };
+                ab_edge: 0,
+                bc_edge: 5,
+                ca_edge: 4,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //0
+            Triangle {
+                a: 0,
+                b: 3,
+                c: 2,
 
-        pub(crate) static ref MIN_NORMAL_DOT: f32 = ((1.0f32 / 30.0) * (25.0 + 5.0_f32.sqrt())).sqrt();
+                ab_edge: 1,
+                bc_edge: 6,
+                ca_edge: 0,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //1
+            Triangle {
+                a: 0,
+                b: 4,
+                c: 3,
+
+                ab_edge: 2,
+                bc_edge: 7,
+                ca_edge: 1,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //2
+            Triangle {
+                a: 0,
+                b: 5,
+                c: 4,
+
+                ab_edge: 3,
+                bc_edge: 8,
+                ca_edge: 2,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //3
+            Triangle {
+                a: 0,
+                b: 1,
+                c: 5,
+
+                ab_edge: 4,
+                bc_edge: 9,
+                ca_edge: 3,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //4
+            // First ring
+            Triangle {
+                a: 5,
+                b: 1,
+                c: 6,
+
+                ab_edge: 9,
+                bc_edge: 10,
+                ca_edge: 15,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //5
+            Triangle {
+                a: 1,
+                b: 2,
+                c: 7,
+
+                ab_edge: 5,
+                bc_edge: 11,
+                ca_edge: 16,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //6
+            Triangle {
+                a: 2,
+                b: 3,
+                c: 8,
+
+                ab_edge: 6,
+                bc_edge: 12,
+                ca_edge: 17,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //7
+            Triangle {
+                a: 3,
+                b: 4,
+                c: 9,
+
+                ab_edge: 7,
+                bc_edge: 13,
+                ca_edge: 18,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //8
+            Triangle {
+                a: 4,
+                b: 5,
+                c: 10,
+
+                ab_edge: 8,
+                bc_edge: 14,
+                ca_edge: 19,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //9
+            // Second ring
+            Triangle {
+                a: 5,
+                b: 6,
+                c: 10,
+
+                ab_edge: 15,
+                bc_edge: 20,
+                ca_edge: 14,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //10
+            Triangle {
+                a: 1,
+                b: 7,
+                c: 6,
+
+                ab_edge: 16,
+                bc_edge: 21,
+                ca_edge: 10,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //11
+            Triangle {
+                a: 2,
+                b: 8,
+                c: 7,
+
+                ab_edge: 17,
+                bc_edge: 22,
+                ca_edge: 11,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //12
+            Triangle {
+                a: 3,
+                b: 9,
+                c: 8,
+
+                ab_edge: 18,
+                bc_edge: 23,
+                ca_edge: 12,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //13
+            Triangle {
+                a: 4,
+                b: 10,
+                c: 9,
+
+                ab_edge: 19,
+                bc_edge: 24,
+                ca_edge: 13,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //14
+            // Bottom
+            Triangle {
+                a: 10,
+                b: 6,
+                c: 11,
+
+                ab_edge: 20,
+                bc_edge: 26,
+                ca_edge: 25,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //15
+            Triangle {
+                a: 6,
+                b: 7,
+                c: 11,
+
+                ab_edge: 21,
+                bc_edge: 27,
+                ca_edge: 26,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //16
+            Triangle {
+                a: 7,
+                b: 8,
+                c: 11,
+
+                ab_edge: 22,
+                bc_edge: 28,
+                ca_edge: 27,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //17
+            Triangle {
+                a: 8,
+                b: 9,
+                c: 11,
+
+                ab_edge: 23,
+                bc_edge: 29,
+                ca_edge: 28,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //18
+            Triangle {
+                a: 9,
+                b: 10,
+                c: 11,
+
+                ab_edge: 24,
+                bc_edge: 25,
+                ca_edge: 29,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            }, //19
+        ];
     }
-
-    const RAW_POINTS: [[f32; 3]; 12] = [
-        // North Pole
-        [0.0, 1.0, 0.0],
-        // Top Ring
-        [
-            0.89442719099991585541,
-            0.44721359549995792770,
-            0.00000000000000000000,
-        ],
-        [
-            0.27639320225002106390,
-            0.44721359549995792770,
-            0.85065080835203987775,
-        ],
-        [
-            -0.72360679774997882507,
-            0.44721359549995792770,
-            0.52573111211913370333,
-        ],
-        [
-            -0.72360679774997904712,
-            0.44721359549995792770,
-            -0.52573111211913348129,
-        ],
-        [
-            0.27639320225002084186,
-            0.44721359549995792770,
-            -0.85065080835203998877,
-        ],
-        // Bottom Ring
-        [
-            0.72360679774997871405,
-            -0.44721359549995792770,
-            -0.52573111211913392538,
-        ],
-        [
-            0.72360679774997904712,
-            -0.44721359549995792770,
-            0.52573111211913337026,
-        ],
-        [
-            -0.27639320225002073084,
-            -0.44721359549995792770,
-            0.85065080835203998877,
-        ],
-        [
-            -0.89442719099991585541,
-            -0.44721359549995792770,
-            0.00000000000000000000,
-        ],
-        [
-            -0.27639320225002139697,
-            -0.44721359549995792770,
-            -0.85065080835203976672,
-        ],
-        // South Pole
-        [0.0, -1.0, 0.0],
-    ];
-
-    pub(crate) const TRIANGLES: [Triangle; 20] = [
-        // Top
-        Triangle {
-            a: 0,
-            b: 2,
-            c: 1,
-
-            ab_edge: 0,
-            bc_edge: 5,
-            ca_edge: 4,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //0
-        Triangle {
-            a: 0,
-            b: 3,
-            c: 2,
-
-            ab_edge: 1,
-            bc_edge: 6,
-            ca_edge: 0,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //1
-        Triangle {
-            a: 0,
-            b: 4,
-            c: 3,
-
-            ab_edge: 2,
-            bc_edge: 7,
-            ca_edge: 1,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //2
-        Triangle {
-            a: 0,
-            b: 5,
-            c: 4,
-
-            ab_edge: 3,
-            bc_edge: 8,
-            ca_edge: 2,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //3
-        Triangle {
-            a: 0,
-            b: 1,
-            c: 5,
-
-            ab_edge: 4,
-            bc_edge: 9,
-            ca_edge: 3,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //4
-        // First ring
-        Triangle {
-            a: 5,
-            b: 1,
-            c: 6,
-
-            ab_edge: 9,
-            bc_edge: 10,
-            ca_edge: 15,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //5
-        Triangle {
-            a: 1,
-            b: 2,
-            c: 7,
-
-            ab_edge: 5,
-            bc_edge: 11,
-            ca_edge: 16,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //6
-        Triangle {
-            a: 2,
-            b: 3,
-            c: 8,
-
-            ab_edge: 6,
-            bc_edge: 12,
-            ca_edge: 17,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //7
-        Triangle {
-            a: 3,
-            b: 4,
-            c: 9,
-
-            ab_edge: 7,
-            bc_edge: 13,
-            ca_edge: 18,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //8
-        Triangle {
-            a: 4,
-            b: 5,
-            c: 10,
-
-            ab_edge: 8,
-            bc_edge: 14,
-            ca_edge: 19,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //9
-        // Second ring
-        Triangle {
-            a: 5,
-            b: 6,
-            c: 10,
-
-            ab_edge: 15,
-            bc_edge: 20,
-            ca_edge: 14,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //10
-        Triangle {
-            a: 1,
-            b: 7,
-            c: 6,
-
-            ab_edge: 16,
-            bc_edge: 21,
-            ca_edge: 10,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //11
-        Triangle {
-            a: 2,
-            b: 8,
-            c: 7,
-
-            ab_edge: 17,
-            bc_edge: 22,
-            ca_edge: 11,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //12
-        Triangle {
-            a: 3,
-            b: 9,
-            c: 8,
-
-            ab_edge: 18,
-            bc_edge: 23,
-            ca_edge: 12,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //13
-        Triangle {
-            a: 4,
-            b: 10,
-            c: 9,
-
-            ab_edge: 19,
-            bc_edge: 24,
-            ca_edge: 13,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //14
-        // Bottom
-        Triangle {
-            a: 10,
-            b: 6,
-            c: 11,
-
-            ab_edge: 20,
-            bc_edge: 26,
-            ca_edge: 25,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //15
-        Triangle {
-            a: 6,
-            b: 7,
-            c: 11,
-
-            ab_edge: 21,
-            bc_edge: 27,
-            ca_edge: 26,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //16
-        Triangle {
-            a: 7,
-            b: 8,
-            c: 11,
-
-            ab_edge: 22,
-            bc_edge: 28,
-            ca_edge: 27,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //17
-        Triangle {
-            a: 8,
-            b: 9,
-            c: 11,
-
-            ab_edge: 23,
-            bc_edge: 29,
-            ca_edge: 28,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //18
-        Triangle {
-            a: 9,
-            b: 10,
-            c: 11,
-
-            ab_edge: 24,
-            bc_edge: 25,
-            ca_edge: 29,
-            ab_forward: false,
-            bc_forward: false,
-            ca_forward: false,
-            contents: TriangleContents::None,
-        }, //19
-    ];
 }
