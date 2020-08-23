@@ -5,12 +5,88 @@
 //!
 
 use glam::Vec3A;
-use std::ops::Index;
+use core::ops::Index;
+use core::marker::PhantomData;
 
 use Slice::*;
 
 #[cfg(feature = "adjacency")]
 pub use adjacency::*;
+
+pub trait BaseShape {
+    fn initial_points() -> &'static [Vec3A];
+    fn triangles() -> &'static [Triangle];
+    fn triangle_normals() -> Option<&'static [Vec3A]> {
+        None
+    }
+    fn triangle_min_dot() -> Option<&'static f32> {
+        None
+    }
+    const EDGES: usize;
+
+    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
+
+    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+        Self::interpolate(a, b, 0.5)
+    }
+
+    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        for (percent, index) in indices.iter().enumerate() {
+            let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
+
+            points[*index as usize] = Self::interpolate(a, b, percent);
+        }
+    }
+}
+
+pub struct IcoSphere;
+
+impl BaseShape for IcoSphere {
+    fn initial_points() -> &'static [Vec3A] {
+        &*consts::INITIAL_POINTS
+    }
+    fn triangles() -> &'static [Triangle] {
+        &consts::TRIANGLES
+    }
+    fn triangle_normals() -> Option<&'static [Vec3A]> {
+        Some(&*consts::TRIANGLE_NORMALS)
+    }
+    fn triangle_min_dot() -> Option<&'static f32> {
+        Some(&*consts::MIN_NORMAL_DOT)
+    }
+    const EDGES: usize = 30;
+
+    #[inline]
+    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        geometric_slerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+        geometric_slerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A])  {
+        geometric_slerp_multiple(a, b, indices, points);
+    }
+}
+
+pub type Hexasphere<T> = Subdivided<T, IcoSphere>;
+
+struct Edge {
+    points: Vec<u32>,
+    done: bool,
+}
+
+impl Default for Edge {
+    fn default() -> Self {
+        Self {
+            points: Vec::new(),
+            done: true,
+        }
+    }
+}
 
 ///
 /// Contents of one of the main triangular faces.
@@ -76,14 +152,14 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool) -> Self {
+    fn one<S: BaseShape>(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
         let p2 = points[bc[1] as usize];
         let index = points.len() as u32;
         if calculate {
-            points.push(geometric_slerp_half(p1, p2));
+            points.push(S::interpolate_half(p1, p2));
         } else {
             points.push(Vec3A::zero());
         }
@@ -93,7 +169,7 @@ impl TriangleContents {
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three(
+    fn three<S: BaseShape>(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
@@ -114,9 +190,9 @@ impl TriangleContents {
                 let ca = points[ca[1] as usize];
 
                 if calculate {
-                    let a = geometric_slerp_half(ab, ca);
-                    let b = geometric_slerp_half(bc, ab);
-                    let c = geometric_slerp_half(ca, bc);
+                    let a = S::interpolate_half(ab, ca);
+                    let b = S::interpolate_half(bc, ab);
+                    let c = S::interpolate_half(ca, bc);
 
                     points.extend_from_slice(&[b, c]);
                     points[x as usize] = a;
@@ -137,7 +213,7 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six(
+    fn six<S: BaseShape>(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
@@ -165,13 +241,13 @@ impl TriangleContents {
                 let caa = points[ca[2] as usize];
 
                 if calculate {
-                    let a = geometric_slerp_half(aba, caa);
-                    let b = geometric_slerp_half(abb, bcb);
-                    let c = geometric_slerp_half(bcc, cac);
+                    let a = S::interpolate_half(aba, caa);
+                    let b = S::interpolate_half(abb, bcb);
+                    let c = S::interpolate_half(bcc, cac);
 
-                    let ab = geometric_slerp_half(a, b);
-                    let bc = geometric_slerp_half(b, c);
-                    let ca = geometric_slerp_half(c, a);
+                    let ab = S::interpolate_half(a, b);
+                    let bc = S::interpolate_half(b, c);
+                    let ca = S::interpolate_half(c, a);
 
                     points[a_index as usize] = a;
                     points[b_index as usize] = b;
@@ -197,7 +273,7 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(
+    pub fn subdivide<S: BaseShape>(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
@@ -210,9 +286,9 @@ impl TriangleContents {
         assert_eq!(ab.len(), ca.len());
         assert!(ab.len() >= 2);
         match self {
-            None => *self = Self::one(ab, bc, points, calculate),
-            One(_) => self.three(ab, bc, ca, points, calculate),
-            Three { .. } => self.six(ab, bc, ca, points, calculate),
+            None => *self = Self::one::<S>(ab, bc, points, calculate),
+            One(_) => self.three::<S>(ab, bc, ca, points, calculate),
+            Three { .. } => self.six::<S>(ab, bc, ca, points, calculate),
             &mut Six {
                 a,
                 b,
@@ -229,7 +305,7 @@ impl TriangleContents {
                     my_side_length: 1,
                     contents: Box::new(Self::none()),
                 };
-                self.subdivide(ab, bc, ca, points, calculate);
+                self.subdivide::<S>(ab, bc, ca, points, calculate);
             }
             &mut More {
                 a: a_idx,
@@ -255,9 +331,9 @@ impl TriangleContents {
                 let caa = points[ca[outer_len - 2] as usize];
 
                 if calculate {
-                    points[a_idx as usize] = geometric_slerp_half(aba, caa);
-                    points[b_idx as usize] = geometric_slerp_half(abb, bcb);
-                    points[c_idx as usize] = geometric_slerp_half(bcc, cac);
+                    points[a_idx as usize] = S::interpolate_half(aba, caa);
+                    points[b_idx as usize] = S::interpolate_half(abb, bcb);
+                    points[c_idx as usize] = S::interpolate_half(bcc, cac);
                 }
 
                 let ab = &sides[0..side_length];
@@ -265,19 +341,19 @@ impl TriangleContents {
                 let ca = &sides[side_length * 2..];
 
                 if calculate {
-                    geometric_slerp_multiple(
+                    S::interpolate_multiple(
                         points[a_idx as usize],
                         points[b_idx as usize],
                         ab,
                         points,
                     );
-                    geometric_slerp_multiple(
+                    S::interpolate_multiple(
                         points[b_idx as usize],
                         points[c_idx as usize],
                         bc,
                         points,
                     );
-                    geometric_slerp_multiple(
+                    S::interpolate_multiple(
                         points[c_idx as usize],
                         points[a_idx as usize],
                         ca,
@@ -285,7 +361,7 @@ impl TriangleContents {
                     );
                 }
 
-                contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points, calculate);
+                contents.subdivide::<S>(Forward(ab), Forward(bc), Forward(ca), points, calculate);
             }
         }
     }
@@ -462,18 +538,19 @@ impl<'a, T> Index<usize> for Slice<'a, T> {
     }
 }
 
-struct Triangle {
+#[derive(Clone, Debug)]
+pub struct Triangle {
     pub a: u32,
     pub b: u32,
     pub c: u32,
-    pub ab: usize,
-    pub bc: usize,
-    pub ca: usize,
-    pub ab_forward: bool,
-    pub bc_forward: bool,
-    pub ca_forward: bool,
+    pub ab_edge: usize,
+    pub bc_edge: usize,
+    pub ca_edge: usize,
+    pub(crate) ab_forward: bool,
+    pub(crate) bc_forward: bool,
+    pub(crate) ca_forward: bool,
 
-    pub contents: TriangleContents,
+    pub(crate) contents: TriangleContents,
 }
 
 impl Default for Triangle {
@@ -482,9 +559,9 @@ impl Default for Triangle {
             a: 0,
             b: 0,
             c: 0,
-            ab: 0,
-            bc: 0,
-            ca: 0,
+            ab_edge: 0,
+            bc_edge: 0,
+            ca_edge: 0,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -494,83 +571,95 @@ impl Default for Triangle {
 }
 
 impl Triangle {
-    fn subdivide_edges<'a>(
+    pub fn new(a: u32, b: u32, c: u32, ab_edge: usize, bc_edge: usize, ca_edge: usize) -> Self {
+        Self {
+            a,
+            b,
+            c,
+            ab_edge,
+            bc_edge,
+            ca_edge,
+            ..Default::default()
+        }
+    }
+
+    fn subdivide_edges<'a, S: BaseShape>(
         &'a mut self,
-        edges: &mut [(Vec<u32>, bool); 30],
+        edges: &mut [Edge],
         points: &mut Vec<Vec3A>,
         calculate: bool,
     ) -> usize {
         let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
-            if !edges[edge_idx].1 {
-                edges[edge_idx].0.push(points.len() as u32);
+            if !edges[edge_idx].done {
+                edges[edge_idx].points.push(points.len() as u32);
                 points.push(Vec3A::zero());
 
                 if calculate {
-                    geometric_slerp_multiple(
+                    S::interpolate_multiple(
                         points[p1 as usize],
                         points[p2 as usize],
-                        &edges[edge_idx].0,
+                        &edges[edge_idx].points,
                         points,
                     );
                 }
 
-                edges[edge_idx].1 = true;
+                edges[edge_idx].done = true;
                 *forward = true;
             } else {
                 *forward = false;
             }
         };
 
-        divide(self.a, self.b, self.ab, &mut self.ab_forward);
-        divide(self.b, self.c, self.bc, &mut self.bc_forward);
-        divide(self.c, self.a, self.ca, &mut self.ca_forward);
+        divide(self.a, self.b, self.ab_edge, &mut self.ab_forward);
+        divide(self.b, self.c, self.bc_edge, &mut self.bc_forward);
+        divide(self.c, self.a, self.ca_edge, &mut self.ca_forward);
 
-        edges[self.ab].0.len()
+        edges[self.ab_edge].points.len()
     }
 
-    pub fn subdivide(
+    fn subdivide<S: BaseShape>(
         &mut self,
-        edges: &mut [(Vec<u32>, bool); 30],
+        edges: &mut [Edge],
         points: &mut Vec<Vec3A>,
         calculate: bool,
     ) {
-        let side_length = self.subdivide_edges(edges, points, calculate) + 1;
+        let side_length = self.subdivide_edges::<S>(edges, points, calculate) + 1;
 
         if side_length > 2 {
             let ab = if self.ab_forward {
-                Forward(&edges[self.ab].0)
+                Forward(&edges[self.ab_edge].points)
             } else {
-                Backward(&edges[self.ab].0)
+                Backward(&edges[self.ab_edge].points)
             };
             let bc = if self.bc_forward {
-                Forward(&edges[self.bc].0)
+                Forward(&edges[self.bc_edge].points)
             } else {
-                Backward(&edges[self.bc].0)
+                Backward(&edges[self.bc_edge].points)
             };
             let ca = if self.ca_forward {
-                Forward(&edges[self.ca].0)
+                Forward(&edges[self.ca_edge].points)
             } else {
-                Backward(&edges[self.ca].0)
+                Backward(&edges[self.ca_edge].points)
             };
-            self.contents.subdivide(ab, bc, ca, points, calculate);
+            self.contents.subdivide::<S>(ab, bc, ca, points, calculate);
         }
     }
 
-    pub fn add_indices(&self, buffer: &mut Vec<u32>, edges: &[(Vec<u32>, bool); 30]) {
+    fn add_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge]) {
         let ab = if self.ab_forward {
-            Forward(&edges[self.ab].0)
+            Forward(&edges[self.ab_edge].points)
         } else {
-            Backward(&edges[self.ab].0)
+            Backward(&edges[self.ab_edge].points)
         };
         let bc = if self.bc_forward {
-            Forward(&edges[self.bc].0)
+            Forward(&edges[self.bc_edge].points)
         } else {
-            Backward(&edges[self.bc].0)
+            Backward(&edges[self.bc_edge].points)
         };
         let ca = if self.ca_forward {
-            Forward(&edges[self.ca].0)
+            Forward(&edges[self.ca_edge].points)
         } else {
-            Backward(&edges[self.ca].0)
+            Backward(&edges[self.ca_edge].points)
         };
 
         add_indices_triangular(self.a, self.b, self.c, ab, bc, ca, &self.contents, buffer);
@@ -593,15 +682,16 @@ impl Triangle {
 /// to preserve accuracy, and not distort due to projections
 /// such as linear interpolation and then normalization.
 ///
-pub struct Hexasphere<T> {
+pub struct Subdivided<T, S: BaseShape> {
     points: Vec<Vec3A>,
     data: Vec<T>,
-    triangles: [Triangle; 20],
-    shared_edges: [(Vec<u32>, bool); 30],
+    triangles: Box<[Triangle]>,
+    shared_edges: Box<[Edge]>,
     subdivisions: usize,
+    _phantom: PhantomData<S>,
 }
 
-impl<T> Hexasphere<T> {
+impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     /// Creates a hexagonally tiled sphere.
     ///
@@ -611,42 +701,16 @@ impl<T> Hexasphere<T> {
     ///
     pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
         let mut this = Self {
-            points: (*consts::INITIAL_POINTS).into(),
-            shared_edges: [
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-                (Vec::new(), true),
-            ],
-            triangles: consts::TRIANGLES,
+            points: S::initial_points().into(),
+            shared_edges: {
+                let mut edges = Vec::new();
+                edges.resize_with(S::EDGES, Edge::default);
+                edges.into_boxed_slice()
+            },
+            triangles: S::triangles().to_vec().into_boxed_slice(),
             subdivisions: 1,
             data: vec![],
+            _phantom: PhantomData
         };
 
         match subdivisions {
@@ -672,12 +736,12 @@ impl<T> Hexasphere<T> {
     /// subdivisions)
     ///
     fn subdivide(&mut self, calculate: bool) {
-        for (_, done) in &mut self.shared_edges {
+        for Edge { done, .. } in &mut *self.shared_edges {
             *done = false;
         }
 
-        for triangle in &mut self.triangles {
-            triangle.subdivide(&mut self.shared_edges, &mut self.points, calculate);
+        for triangle in &mut *self.triangles {
+            triangle.subdivide::<S>(&mut *self.shared_edges, &mut self.points, calculate);
         }
     }
 
@@ -763,7 +827,7 @@ impl<T> Hexasphere<T> {
     /// ```
     ///
     pub fn shared_vertices(&self) -> usize {
-        self.subdivisions * 30 + 12
+        self.subdivisions * S::EDGES + S::initial_points().len()
     }
 
     ///
@@ -828,15 +892,15 @@ impl<T> Hexasphere<T> {
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
-#[allow(dead_code)]
-fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
     let angle = a.dot(b).acos();
 
     let sin = angle.sin().recip();
     a * (((1.0 - p) * angle).sin() * sin) + b * ((p * angle).sin() * sin)
 }
 
-fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
+/// Note: `a` and `b` should both be normalized for normalized results.
+pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
     let angle = a.dot(b).acos();
 
     let sin_denom = angle.sin().recip();
@@ -846,7 +910,7 @@ fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
 }
 
 /// Note: `a` and `b` should both be normalized for normalized results.
-fn geometric_slerp_multiple<'a>(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+pub fn geometric_slerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
     let angle = a.dot(b).acos();
     let sin = angle.sin().recip();
 
@@ -855,6 +919,38 @@ fn geometric_slerp_multiple<'a>(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
 
         points[*index as usize] =
             a * (((1.0 - percent) * angle).sin() * sin) + b * ((percent * angle).sin() * sin);
+    }
+}
+
+pub fn normalized_lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    ((1.0 - p) * a + p * b).normalize()
+}
+
+pub fn normalized_lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    ((a + b) * 0.5).normalize()
+}
+
+pub fn normalized_lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    for (percent, index) in indices.iter().enumerate() {
+        let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
+
+        points[*index as usize] = ((1.0 - percent) * a + percent * b).normalize();
+    }
+}
+
+pub fn lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    (1.0 - p) * a + p * b
+}
+
+pub fn lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    (a + b) * 0.5
+}
+
+pub fn lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    for (percent, index) in indices.iter().enumerate() {
+        let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
+
+        points[*index as usize] = (1.0 - percent) * a + percent * b;
     }
 }
 
@@ -1364,9 +1460,9 @@ mod consts {
             b: 2,
             c: 1,
 
-            ab: 0,
-            bc: 5,
-            ca: 4,
+            ab_edge: 0,
+            bc_edge: 5,
+            ca_edge: 4,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1377,9 +1473,9 @@ mod consts {
             b: 3,
             c: 2,
 
-            ab: 1,
-            bc: 6,
-            ca: 0,
+            ab_edge: 1,
+            bc_edge: 6,
+            ca_edge: 0,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1390,9 +1486,9 @@ mod consts {
             b: 4,
             c: 3,
 
-            ab: 2,
-            bc: 7,
-            ca: 1,
+            ab_edge: 2,
+            bc_edge: 7,
+            ca_edge: 1,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1403,9 +1499,9 @@ mod consts {
             b: 5,
             c: 4,
 
-            ab: 3,
-            bc: 8,
-            ca: 2,
+            ab_edge: 3,
+            bc_edge: 8,
+            ca_edge: 2,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1416,9 +1512,9 @@ mod consts {
             b: 1,
             c: 5,
 
-            ab: 4,
-            bc: 9,
-            ca: 3,
+            ab_edge: 4,
+            bc_edge: 9,
+            ca_edge: 3,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1430,9 +1526,9 @@ mod consts {
             b: 1,
             c: 6,
 
-            ab: 9,
-            bc: 10,
-            ca: 15,
+            ab_edge: 9,
+            bc_edge: 10,
+            ca_edge: 15,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1443,9 +1539,9 @@ mod consts {
             b: 2,
             c: 7,
 
-            ab: 5,
-            bc: 11,
-            ca: 16,
+            ab_edge: 5,
+            bc_edge: 11,
+            ca_edge: 16,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1456,9 +1552,9 @@ mod consts {
             b: 3,
             c: 8,
 
-            ab: 6,
-            bc: 12,
-            ca: 17,
+            ab_edge: 6,
+            bc_edge: 12,
+            ca_edge: 17,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1469,9 +1565,9 @@ mod consts {
             b: 4,
             c: 9,
 
-            ab: 7,
-            bc: 13,
-            ca: 18,
+            ab_edge: 7,
+            bc_edge: 13,
+            ca_edge: 18,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1482,9 +1578,9 @@ mod consts {
             b: 5,
             c: 10,
 
-            ab: 8,
-            bc: 14,
-            ca: 19,
+            ab_edge: 8,
+            bc_edge: 14,
+            ca_edge: 19,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1496,9 +1592,9 @@ mod consts {
             b: 6,
             c: 10,
 
-            ab: 15,
-            bc: 20,
-            ca: 14,
+            ab_edge: 15,
+            bc_edge: 20,
+            ca_edge: 14,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1509,9 +1605,9 @@ mod consts {
             b: 7,
             c: 6,
 
-            ab: 16,
-            bc: 21,
-            ca: 10,
+            ab_edge: 16,
+            bc_edge: 21,
+            ca_edge: 10,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1522,9 +1618,9 @@ mod consts {
             b: 8,
             c: 7,
 
-            ab: 17,
-            bc: 22,
-            ca: 11,
+            ab_edge: 17,
+            bc_edge: 22,
+            ca_edge: 11,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1535,9 +1631,9 @@ mod consts {
             b: 9,
             c: 8,
 
-            ab: 18,
-            bc: 23,
-            ca: 12,
+            ab_edge: 18,
+            bc_edge: 23,
+            ca_edge: 12,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1548,9 +1644,9 @@ mod consts {
             b: 10,
             c: 9,
 
-            ab: 19,
-            bc: 24,
-            ca: 13,
+            ab_edge: 19,
+            bc_edge: 24,
+            ca_edge: 13,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1562,9 +1658,9 @@ mod consts {
             b: 6,
             c: 11,
 
-            ab: 20,
-            bc: 26,
-            ca: 25,
+            ab_edge: 20,
+            bc_edge: 26,
+            ca_edge: 25,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1575,9 +1671,9 @@ mod consts {
             b: 7,
             c: 11,
 
-            ab: 21,
-            bc: 27,
-            ca: 26,
+            ab_edge: 21,
+            bc_edge: 27,
+            ca_edge: 26,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1588,9 +1684,9 @@ mod consts {
             b: 8,
             c: 11,
 
-            ab: 22,
-            bc: 28,
-            ca: 27,
+            ab_edge: 22,
+            bc_edge: 28,
+            ca_edge: 27,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1601,9 +1697,9 @@ mod consts {
             b: 9,
             c: 11,
 
-            ab: 23,
-            bc: 29,
-            ca: 28,
+            ab_edge: 23,
+            bc_edge: 29,
+            ca_edge: 28,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
@@ -1614,9 +1710,9 @@ mod consts {
             b: 10,
             c: 11,
 
-            ab: 24,
-            bc: 25,
-            ca: 29,
+            ab_edge: 24,
+            bc_edge: 25,
+            ca_edge: 29,
             ab_forward: false,
             bc_forward: false,
             ca_forward: false,
