@@ -13,17 +13,138 @@ use Slice::*;
 #[cfg(feature = "adjacency")]
 pub use adjacency::*;
 
+///
+/// Defines the setup for a base shape, and the functions
+/// used in interpolation.
+///
+/// If you want to use a different interpolation function,
+/// implement this trait for a new type, and carry over only
+/// the properties you'd like to keep:
+///
+/// ```rs
+/// # use hexasphere::BaseShape;
+/// use hexasphere::{IcosahedronBase, Triangle};
+/// use glam::Vec3A;
+/// // Uses linear interpolation instead of spherical.
+/// struct FlatIcosahedron;
+///
+/// impl BaseShape for FlatIcosahedron {
+///     // Keep the initial parameters.
+///     fn initial_points() -> &'static [Vec3A] {
+///         IcoSphereBase::initial_points()
+///     }
+///
+///     fn triangles() -> &'static [Triangle] {
+///         IcoSphereBase::triangles()
+///     }
+///     const EDGES: usize = IcoSphereBase::EDGES;
+///
+///     // Swap out what you'd like to change.
+///     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+///         hexasphere::lerp(a, b, p)
+///     }
+///
+///     fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+///         hexasphere::lerp_half(a, b)
+///     }
+///
+///     fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+///         hexasphere::lerp_multiple(a, b, indices, points);
+///     }
+/// }
+/// ```
+///
+/// Or, create your own shape, by changing the values for
+/// [`initial_points`], [`triangles`], and [`EDGES`]. Check
+/// the documentation for these members individually on how
+/// they should be implemented.
+///
 pub trait BaseShape {
+    ///
+    /// The initial vertices for the triangle. Note that
+    /// `Vec3A::new` is not a `const fn()`, hence I recommend
+    /// you use `lazy_static`. Check the source file for this
+    /// crate and look for the constants module at the bottom
+    /// for an example.
+    ///
+    /// Constraints on the points depend on the interpolation
+    /// function used:
+    /// - `slerp` requires normalized (magnitude 1) data.
+    /// - `lerp` doesn't care.
+    /// - `normalized_lerp` requires normalized (magnitude 1)
+    /// data.
+    ///
     fn initial_points() -> &'static [Vec3A];
+
+    ///
+    /// Base triangles for the shape.
+    ///
+    /// - The fields `a`, `b`, and `c` define the indices for
+    /// the points of the triangles given the data present
+    /// in `initial_points`. Note that this crate assumes
+    /// points are in a counter clockwise ordering.
+    /// - The fields `ab_edge`, `bc_edge`, `ca_edge` mark the
+    /// index of the edge which `a`/`b`, `b`/`c`, and `c`/`a`
+    /// border respectively. While theoretically you could give
+    /// each triangle its own edge, minimizing edges saves on
+    /// memory footprint and performance.
+    /// - Triangles should be created through [`Triangle::new`].
+    ///
     fn triangles() -> &'static [Triangle];
+
+    ///
+    /// Number of unique edges defined in the contents of
+    /// `triangles()`. This number is 5 for a square for
+    /// example:
+    /// ```text
+    /// a - 0 - b
+    /// |     / |
+    /// 3   4   1
+    /// | /     |
+    /// d - 2 - c
+    /// ```
+    ///
     const EDGES: usize;
 
+    ///
+    /// Basic function used for interpolation. When `p` is
+    /// `0.0`, `a` is expected. When `p` is `1.0`, `b` is
+    /// expected. There are three options already implemented
+    /// in this crate:
+    /// - [`hexasphere::lerp`] implements linear interpolation.
+    /// - [`hexasphere::geometric_slerp`] implements spherical
+    /// interpolation. (Interpolates along an arc on a sphere)
+    /// - [`hexasphere::normalized_lerp`] implements cheaper
+    /// yet less accurate spherical interpolation. The accuracy
+    /// decreases as the angle between the two points on the unit
+    /// sphere increases.
+    ///
     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
 
+    ///
+    /// If an optimization is available for the case where `p`
+    /// is `0.5`, this function should implement it. This defaults
+    /// to calling `interpolate(a, b, 0.5)` however.
+    ///
     fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
         Self::interpolate(a, b, 0.5)
     }
 
+    ///
+    /// If an optimization is available for the case where `p`
+    /// varies but `a` and `b` don't this function should implement
+    /// it.
+    ///
+    /// ### Parameters
+    /// - `a`: start.
+    /// - `b`: end.
+    /// - `indices`: list of indices to index into `points`. `points`
+    /// at the index should contain the result. The index (n) of an
+    /// index should correspond with the nth point in a distribution
+    /// of `indices.len()` points between (exclusive) `a` and `b`.
+    /// - `points`: list of points where the results of the calculation
+    /// should end up. To be indexed by values in `indices`.
+    ///
     fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         for (percent, index) in indices.iter().enumerate() {
             let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
@@ -699,7 +820,7 @@ impl Default for Triangle {
 }
 
 impl Triangle {
-    pub fn new(a: u32, b: u32, c: u32, ab_edge: usize, bc_edge: usize, ca_edge: usize) -> Self {
+    pub const fn new(a: u32, b: u32, c: u32, ab_edge: usize, bc_edge: usize, ca_edge: usize) -> Self {
         Self {
             a,
             b,
@@ -707,7 +828,12 @@ impl Triangle {
             ab_edge,
             bc_edge,
             ca_edge,
-            ..Default::default()
+
+            ab_forward: false,
+            bc_forward: false,
+            ca_forward: false,
+
+            contents: TriangleContents::None,
         }
     }
 
