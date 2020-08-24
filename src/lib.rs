@@ -170,6 +170,38 @@ impl EquilateralBaseShape for TriangleBase {
 
 pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 
+pub struct SquareBase;
+
+impl BaseShape for SquareBase {
+    #[inline]
+    fn initial_points() -> &'static [Vec3A] {
+        &*consts::square::INITIAL_POINTS
+    }
+
+    #[inline]
+    fn triangles() -> &'static [Triangle] {
+        &consts::square::TRIANGLES
+    }
+    const EDGES: usize = consts::square::EDGES;
+
+    #[inline]
+    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        lerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+        lerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        lerp_multiple(a, b, indices, points);
+    }
+}
+
+pub type SquarePlane<T> = Subdivided<T, SquareBase>;
+
 struct Edge {
     points: Vec<u32>,
     done: bool,
@@ -1440,6 +1472,55 @@ mod tests {
 }
 
 mod consts {
+    pub mod square {
+        use crate::{Triangle, TriangleContents};
+        use glam::Vec3A;
+
+        lazy_static::lazy_static! {
+            pub(crate) static ref INITIAL_POINTS: [Vec3A; 4] = [
+                Vec3A::new(std::f32::consts::FRAC_1_SQRT_2, 0.0, std::f32::consts::FRAC_1_SQRT_2),
+                Vec3A::new(std::f32::consts::FRAC_1_SQRT_2, 0.0, -std::f32::consts::FRAC_1_SQRT_2),
+                Vec3A::new(-std::f32::consts::FRAC_1_SQRT_2, 0.0, -std::f32::consts::FRAC_1_SQRT_2),
+                Vec3A::new(-std::f32::consts::FRAC_1_SQRT_2, 0.0, std::f32::consts::FRAC_1_SQRT_2),
+            ];
+
+            pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 2] = [
+                Vec3A::new(0.0, 1.0, 0.0),
+                Vec3A::new(0.0, 1.0, 0.0),
+            ];
+        }
+
+        pub(crate) const TRIANGLES: [Triangle; 2] = [
+            Triangle {
+                a: 0,
+                b: 1,
+                c: 2,
+
+                ab_edge: 1,
+                bc_edge: 2,
+                ca_edge: 0,
+                ab_forward: true,
+                bc_forward: true,
+                ca_forward: true,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 0,
+                b: 2,
+                c: 3,
+
+                ab_edge: 0,
+                bc_edge: 3,
+                ca_edge: 4,
+                ab_forward: true,
+                bc_forward: true,
+                ca_forward: true,
+                contents: TriangleContents::None,
+            },
+        ];
+
+        pub(crate) const EDGES: usize = 5;
+    }
     pub mod triangle {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
