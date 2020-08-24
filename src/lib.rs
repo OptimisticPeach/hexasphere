@@ -154,11 +154,46 @@ pub trait BaseShape {
     }
 }
 
+///
+/// Implemented in the case where the triangles on the shape
+/// are both equilateral and identifiable from their normal.
+///
+/// This is only used in the cases of spherical shapes.
+///
 pub trait EquilateralBaseShape: BaseShape {
+    ///
+    /// Normals for each of the triangles provided by
+    /// [`BaseShape::triangles`].
+    ///
     fn triangle_normals() -> &'static [Vec3A];
+    ///
+    /// Minimum value for the dot product which one could use
+    /// to determine that triangle being the closest.
+    ///
+    /// If the dot product between a vector and a triangle
+    /// normal is greater than this, then that vector is
+    /// guaranteed to be within that triangle.
+    ///
+    /// This is also the cosine of the angle of the cone
+    /// whose circular edge lies on a triangle.
+    ///
     fn triangle_min_dot() -> f32;
 }
 
+///
+/// Implements an icosahedron as the base shape.
+///
+/// - 12 vertices
+/// - 20 faces
+/// - 30 edges
+///
+/// This shape has the best results for a sphere.
+///
+/// The resulting smaller triangles are close to being
+/// equilateral, so if one draws lines from the center
+/// of the each triangle to the middle of the each edge
+/// then the result will be 12 pentagons and many hexagons.
+///
 pub struct IcoSphereBase;
 
 impl BaseShape for IcoSphereBase {
@@ -201,8 +236,32 @@ impl EquilateralBaseShape for IcoSphereBase {
     }
 }
 
+///
+/// Icosphere.
+///
+/// See [`IcoSphereBase`].
+///
 pub type Hexasphere<T> = Subdivided<T, IcoSphereBase>;
 
+///
+/// Icosphere.
+///
+/// See [`IcoSphereBase`].
+///
+pub type IcoSphere<T> = Subdivided<T, IcoSphereBase>;
+
+///
+/// Implements a tetrahedron as the base shape.
+///
+/// - 4 vertices
+/// - 4 faces
+/// - 6 edges
+///
+/// This shape provides somewhat skewed results for a
+/// sphere, especially at lower subdivisions.
+/// I recommend that subdivisions of higher than 10
+/// be used for acceptable results.
+///
 pub struct TetraSphereBase;
 
 impl BaseShape for TetraSphereBase {
@@ -245,8 +304,25 @@ impl EquilateralBaseShape for TetraSphereBase {
     }
 }
 
+///
+/// Tetrasphere (Sphere from tetrahedron).
+///
+/// See [`TetraSphereBase`].
+///
 pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
 
+///
+/// Implements a single triangle as the base shape.
+///
+/// - 3 vertices
+/// - 1 face
+/// - 3 edges
+///
+/// This is a triangle on the XZ plane. The circumscribed
+/// circle on the triangle has radius 1.0. This is done
+/// to preserve accuracy of the subdivisions at higher
+/// levels of subdivision.
+///
 pub struct TriangleBase;
 
 impl BaseShape for TriangleBase {
@@ -289,8 +365,25 @@ impl EquilateralBaseShape for TriangleBase {
     }
 }
 
+///
+/// A triangle.
+///
+/// See [`TriangleBase`].
+///
 pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 
+///
+/// Implements a square as the base shape.
+///
+/// - 4 vertices
+/// - 2 faces
+/// - 5 edges
+///
+/// This is a square on the XZ plane. The circumscribed
+/// circle on the square has radius 1.0. This is done to
+/// preserve the accuracy of the subdivisions at higher
+/// levels of subdivision.
+///
 pub struct SquareBase;
 
 impl BaseShape for SquareBase {
@@ -321,10 +414,25 @@ impl BaseShape for SquareBase {
     }
 }
 
+///
+/// A square.
+///
+/// See [`SquareBase`].
+///
 pub type SquarePlane<T> = Subdivided<T, SquareBase>;
 
+///
+/// The edge between two main triangles.
+///
 struct Edge {
+    ///
+    /// Indices of the points between the endpoints.
+    ///
     points: Vec<u32>,
+    ///
+    /// Whether this edge has already been processed
+    /// or not.
+    ///
     done: bool,
 }
 
@@ -615,6 +723,11 @@ impl TriangleContents {
         }
     }
 
+    ///
+    /// Indexes the AB edge.
+    ///
+    /// This is inclusive of A and B.
+    ///
     pub fn idx_ab(&self, idx: usize) -> u32 {
         use TriangleContents::*;
         match self {
@@ -646,6 +759,12 @@ impl TriangleContents {
             },
         }
     }
+
+    ///
+    /// Indexes the BC edge.
+    ///
+    /// This is inclusive of B and C.
+    ///
     pub fn idx_bc(&self, idx: usize) -> u32 {
         use TriangleContents::*;
         match self {
@@ -679,6 +798,12 @@ impl TriangleContents {
             },
         }
     }
+
+    ///
+    /// Indexes the CA edge.
+    ///
+    /// This is inclusive of C and A.
+    ///
     pub fn idx_ca(&self, idx: usize) -> u32 {
         use TriangleContents::*;
         match self {
@@ -713,6 +838,10 @@ impl TriangleContents {
         }
     }
 
+    ///
+    /// Adds the indices in this portion of the triangle
+    /// to the specified buffer in order.
+    ///
     pub fn add_indices(&self, buffer: &mut Vec<u32>) {
         use TriangleContents::*;
         match self {
@@ -763,12 +892,19 @@ impl TriangleContents {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+///
+/// Implements a forwards/backwards slice which can be
+/// used similar to any other slice.
+///
 enum Slice<'a, T> {
     Forward(&'a [T]),
     Backward(&'a [T]),
 }
 
 impl<'a, T> Slice<'a, T> {
+    ///
+    /// The length of the underlying slice.
+    ///
     fn len(&self) -> usize {
         match self {
             &Forward(x) | &Backward(x) => x.len(),
@@ -788,6 +924,12 @@ impl<'a, T> Index<usize> for Slice<'a, T> {
 }
 
 #[derive(Clone, Debug)]
+///
+/// A main triangle on the base shape of a subdivided shape.
+///
+/// The specification of the library expects `a`, `b`, and `c`
+/// to be in a counter-clockwise winding.
+///
 pub struct Triangle {
     pub a: u32,
     pub b: u32,
@@ -820,6 +962,10 @@ impl Default for Triangle {
 }
 
 impl Triangle {
+    ///
+    /// Creates a new `Triangle` given the data. This is done
+    /// to avoid boilerplate.
+    ///
     pub const fn new(a: u32, b: u32, c: u32, ab_edge: usize, bc_edge: usize, ca_edge: usize) -> Self {
         Self {
             a,
@@ -837,6 +983,11 @@ impl Triangle {
         }
     }
 
+    ///
+    /// Subdivides the edges of this triangle if necessary,
+    /// and records the direction in which the values should
+    /// be read in the `*_forward` values.
+    ///
     fn subdivide_edges<'a, S: BaseShape>(
         &'a mut self,
         edges: &mut [Edge],
@@ -871,6 +1022,13 @@ impl Triangle {
         edges[self.ab_edge].points.len()
     }
 
+    ///
+    /// Subdivides the edges and contents of this triangle.
+    ///
+    /// If `calculate` is set to `false`, then the points are
+    /// simply added to the buffer and the indices recorded,
+    /// but no calculations are performed.
+    ///
     fn subdivide<S: BaseShape>(
         &mut self,
         edges: &mut [Edge],
@@ -899,6 +1057,10 @@ impl Triangle {
         }
     }
 
+    ///
+    /// Appends the indices of all the subtriangles onto the
+    /// specified buffer.
+    ///
     fn add_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge]) {
         let ab = if self.ab_forward {
             Forward(&edges[self.ab_edge].points)
@@ -923,18 +1085,16 @@ impl Triangle {
 }
 
 ///
-/// Hexagonally tiled sphere. Created with the `new` method.
+/// A progressively subdivided shape which can record
+/// the indices of the points and list out the individual
+/// triangles of the resulting shape.
 ///
-/// Points are represented as the triangular subdivisions of
-/// the faces of an icosahedron, the dual of which creates a
-/// hexagonally tiled sphere with 12 pentagons. The number of
-/// subdivisions is exactly equal to the number of hexagons
-/// between adjacent pentagons.
+/// All base triangles specified by `S` in [`BaseShape`]
+/// are expected to be in counter clockwise winding.
 ///
-/// Points are stored in normalized space, on the surface of a
-/// unit sphere. The initial points are spherically interpolated
-/// to preserve accuracy, and not distort due to projections
-/// such as linear interpolation and then normalization.
+/// Points are preferably stored with coordinates less
+/// than or equal to `1.0`. This is why all default shapes
+/// lie on the unit sphere.
 ///
 pub struct Subdivided<T, S: BaseShape> {
     points: Vec<Vec3A>,
@@ -947,11 +1107,14 @@ pub struct Subdivided<T, S: BaseShape> {
 
 impl<T, S: BaseShape> Subdivided<T, S> {
     ///
-    /// Creates a hexagonally tiled sphere.
+    /// Creates the base shape from `S` and subdivides it.
     ///
-    /// The number of hexagons between pentagons is `subdivisions`, and
-    /// `generator` permits you to create a unique value for every point
-    /// on the sphere.
+    /// - `subdivisions` specifies the number of times a subdivision
+    /// will be created. In other terms, this is the number of auxiliary
+    /// points between the vertices on the original shape.
+    ///
+    /// - `generator` is a function run once all the subdivisions are
+    /// applied and its values are stored in an internal `Vec`.
     ///
     pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
         let mut this = Self {
@@ -987,7 +1150,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     /// Subdivides all triangles. `calculate` signals whether or not
     /// to recalculate vertices (To not calculate vertices between many
-    /// subdivisions)
+    /// subdivisions).
     ///
     fn subdivide(&mut self, calculate: bool) {
         for Edge { done, .. } in &mut *self.shared_edges {
@@ -999,6 +1162,9 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
     }
 
+    ///
+    /// The raw points created by the subdivision process.
+    ///
     pub fn raw_points(&self) -> &[Vec3A] {
         &self.points
     }
@@ -1006,14 +1172,41 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     /// Appends the indices for the triangle into `buffer`.
     ///
+    /// The specified triangle is a main triangle on the base
+    /// shape. The range of this should be limited to the number
+    /// of triangles in the base shape.
+    ///
+    /// Alternatively, use [`get_all_indices`] to get all the
+    /// indices.
+    ///
     pub fn get_indices(&self, triangle: usize, buffer: &mut Vec<u32>) {
         self.triangles[triangle].add_indices(buffer, &self.shared_edges);
     }
 
+    ///
+    /// Gets the indices for all main triangles in the shape.
+    ///
+    pub fn get_all_indices(&self) -> Vec<u32> {
+        let mut buffer = Vec::new();
+
+        for i in 0..self.triangles.len() {
+            self.get_indices(i, &mut buffer);
+        }
+
+        buffer
+    }
+
+    ///
+    /// Returns the number of subdivisions applied when this shape
+    /// was created.
+    ///
     pub fn subdivisions(&self) -> usize {
         self.subdivisions
     }
 
+    ///
+    /// Returns the custom data created by the generator function.
+    ///
     pub fn raw_data(&self) -> &[T] {
         &self.data
     }
@@ -1077,7 +1270,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// # Equation
     ///
     /// ```text
-    /// subdivisions * 30 + 12
+    /// subdivisions * EDGES + INITIAL_POINTS
     /// ```
     ///
     pub fn shared_vertices(&self) -> usize {
@@ -1085,7 +1278,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Linear distance between two points on this sphere.
+    /// Linear distance between two points on this shape.
     ///
     pub fn linear_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
         (self.points[p1 as usize] - self.points[p2 as usize]).length() * radius
@@ -1097,7 +1290,7 @@ impl<T, S: BaseShape + EquilateralBaseShape> Subdivided<T, S> {
     /// Closest "main" triangle.
     ///
     /// Undefined results if the point is one of the vertices
-    /// on the original icosahedron.
+    /// on the original base shape.
     ///
     pub fn main_triangle_intersect(point: Vec3A) -> usize {
         let point = point.normalize();
@@ -1123,7 +1316,8 @@ impl<T, S: BaseShape + EquilateralBaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Distance between two points on this sphere.
+    /// Distance between two points on this sphere (assuming this
+    /// is a sphere).
     ///
     pub fn spherical_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
         self.points[p1 as usize]
@@ -1149,7 +1343,13 @@ impl<T> Hexasphere<T> {
     }
 }
 
+///
+/// Implements spherical interpolation along the great arc created by
+/// the initial points. This returns a new point `p` percent of the way
+/// along that arc.
+///
 /// Note: `a` and `b` should both be normalized for normalized results.
+///
 pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
     let angle = a.dot(b).acos();
 
@@ -1157,7 +1357,12 @@ pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
     a * (((1.0 - p) * angle).sin() * sin) + b * ((p * angle).sin() * sin)
 }
 
+///
+/// This is an optimization for the `geometric_slerp` in the case where `p`
+/// is `0.5` or 50%.
+///
 /// Note: `a` and `b` should both be normalized for normalized results.
+///
 pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
     let angle = a.dot(b).acos();
 
@@ -1167,7 +1372,14 @@ pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
     (a + b) * sin_denom * sin_numer
 }
 
+///
+/// This is an optimization for the case where multiple points require the
+/// calculation of varying values of `p` for the same start and end points.
+///
+/// See the intended use in [`BaseShape::interpolate_multiple`].
+///
 /// Note: `a` and `b` should both be normalized for normalized results.
+///
 pub fn geometric_slerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
     let angle = a.dot(b).acos();
     let sin = angle.sin().recip();
@@ -1180,14 +1392,27 @@ pub fn geometric_slerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
     }
 }
 
+///
+/// Performs normalized linear interpolation. This creates distortion when
+/// compared with spherical interpolation along an arc, however this is most
+/// likely faster, as though this avoids expensive sin and acos calculations.
+///
 pub fn normalized_lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
     ((1.0 - p) * a + p * b).normalize()
 }
 
+///
+/// This is an optimization of `normalized_lerp` which avoids a multiplication.
+///
 pub fn normalized_lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
     ((a + b) * 0.5).normalize()
 }
 
+///
+/// This is provided as a plug in for people who need it, but this implements
+/// essentially the same algorithm as `BaseShape` would without ever being
+/// reimplemented.
+///
 pub fn normalized_lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
     for (percent, index) in indices.iter().enumerate() {
         let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
@@ -1196,14 +1421,25 @@ pub fn normalized_lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
     }
 }
 
+///
+/// Simple linear interpolation. No weirdness here.
+///
 pub fn lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
     (1.0 - p) * a + p * b
 }
 
+///
+/// Gives the average of the two points.
+///
 pub fn lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
     (a + b) * 0.5
 }
 
+///
+/// This is provided as a plug in for people who need it, but this implements
+/// essentially the same algorithm as `BaseShape` would without ever being
+/// reimplemented.
+///
 pub fn lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
     for (percent, index) in indices.iter().enumerate() {
         let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
@@ -1212,6 +1448,12 @@ pub fn lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) 
     }
 }
 
+///
+/// Adds the indices of the triangles in this "layer" of the triangle to
+/// the buffer.
+///
+// The logic in this function has been worked out mostly on pen and paper
+// and therefore it is difficult to read.
 fn add_indices_triangular(
     a: u32,
     b: u32,
@@ -1291,31 +1533,51 @@ fn add_indices_triangular(
 }
 
 #[cfg(feature = "adjacency")]
+///
+/// Implements neighbour tracking.
+///
 mod adjacency {
     use smallvec::SmallVec;
     use std::collections::HashMap;
 
     #[derive(Default, Clone, Debug)]
+    ///
+    /// Stores the neighbours of a subdivided shape.
+    ///
     pub struct AdjacentStore {
         pub(crate) subdivisions: usize,
         pub(crate) map: HashMap<u32, SmallVec<[u32; 6]>>,
     }
 
     impl AdjacentStore {
+        ///
+        /// Creates an empty neighbour storage.
+        ///
         pub fn new() -> Self {
             Self::default()
         }
 
+        ///
+        /// Optionally returns the neighbours for a vertex.
+        ///
+        /// In the case of an IcoSphere, this is of length `5` or `6`.
+        ///
         pub fn neighbours(&self, id: u32) -> Option<&[u32]> {
             self.map.get(&id).map(|x| &**x)
         }
 
+        ///
+        /// Creates the map given the indices of a shape.
+        ///
         pub fn from_indices(indices: &[u32]) -> Self {
             let mut this = Self::new();
             this.add_triangle_indices(indices);
             this
         }
 
+        ///
+        /// Adds the indices to the map.
+        ///
         pub fn add_triangle_indices(&mut self, triangles: &[u32]) {
             assert_eq!(triangles.len() % 3, 0);
 
@@ -1324,6 +1586,9 @@ mod adjacency {
             }
         }
 
+        ///
+        /// Adds a single subdivided triangle to the storage.
+        ///
         fn add_triangle(&mut self, [a, b, c]: [u32; 3]) {
             let mut add_triangle = |a, b, c| {
                 let vec = self.map.entry(a).or_insert_with(SmallVec::new);
@@ -1597,6 +1862,9 @@ mod tests {
     }
 }
 
+///
+/// Constant values for the
+///
 mod consts {
     pub mod square {
         use crate::{Triangle, TriangleContents};
