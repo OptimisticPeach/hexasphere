@@ -39,6 +39,10 @@
 //! }
 //! ```
 //!
+//! # Features
+//! - `adjacency` allows the user to create neighbour maps from
+//! the indices provided by the `Subdivided` struct.
+//!
 
 use glam::Vec3A;
 use core::ops::Index;

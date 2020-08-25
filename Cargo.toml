@@ -1,6 +1,6 @@
 [package]
 name = "hexasphere"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["OptimisticPeach <patrikbuhring@yahoo.com>"]
 edition = "2018"
 description = """
@@ -19,6 +19,6 @@ adjacency = ["smallvec"]
 
 [dependencies]
 glam = "0.9"
-lazy_static = "1.4.0"
+lazy_static = "1.4"
 
 smallvec = { version = "1.4.2", optional = true }
