@@ -15,13 +15,13 @@
 //!
 //! ## Example usage
 //!
-//! ```rs
+//! ```rust
 //! use hexasphere::IcoSphere;
 //!
 //! fn main() {
 //!     // Create a new sphere with 20 subdivisions
 //!     // an no data associated with the vertices.
-//!     let sphere = IcoSphere::new(20, || ());
+//!     let sphere = IcoSphere::new(20, |_| ());
 //!
 //!     let points = sphere.raw_points();
 //!     for p in points {
@@ -61,9 +61,9 @@ pub use adjacency::*;
 /// implement this trait for a new type, and carry over only
 /// the properties you'd like to keep:
 ///
-/// ```rs
+/// ```rust
 /// # use hexasphere::BaseShape;
-/// use hexasphere::{IcosahedronBase, Triangle};
+/// use hexasphere::{IcoSphereBase, Triangle};
 /// use glam::Vec3A;
 /// // Uses linear interpolation instead of spherical.
 /// struct FlatIcosahedron;
@@ -98,6 +98,10 @@ pub use adjacency::*;
 /// [`initial_points`], [`triangles`], and [`EDGES`]. Check
 /// the documentation for these members individually on how
 /// they should be implemented.
+///
+/// [`initial_points`]: #tymethod.initial_points
+/// [`triangles`]: #tymethod.triangles
+/// [`EDGES`]: #associatedconstant.EDGES
 ///
 pub trait BaseShape {
     ///
@@ -151,13 +155,17 @@ pub trait BaseShape {
     /// `0.0`, `a` is expected. When `p` is `1.0`, `b` is
     /// expected. There are three options already implemented
     /// in this crate:
-    /// - [`hexasphere::lerp`] implements linear interpolation.
-    /// - [`hexasphere::geometric_slerp`] implements spherical
+    /// - [`lerp`] implements linear interpolation.
+    /// - [`geometric_slerp`] implements spherical
     /// interpolation. (Interpolates along an arc on a sphere)
-    /// - [`hexasphere::normalized_lerp`] implements cheaper
+    /// - [`normalized_lerp`] implements cheaper
     /// yet less accurate spherical interpolation. The accuracy
     /// decreases as the angle between the two points on the unit
     /// sphere increases.
+    ///
+    /// [`lerp`]: ../fn.lerp.html
+    /// [`geometric_slerp`]: ../fn.geometric_slerp.html
+    /// [`normalized_lerp`]: ../fn.normalized_lerp.html
     ///
     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
 
@@ -1218,6 +1226,8 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     /// Alternatively, use [`get_all_indices`] to get all the
     /// indices.
+    ///
+    /// [`get_all_indices`]: #method.get_all_indices
     ///
     pub fn get_indices(&self, triangle: usize, buffer: &mut Vec<u32>) {
         self.triangles[triangle].add_indices(buffer, &self.shared_edges);
