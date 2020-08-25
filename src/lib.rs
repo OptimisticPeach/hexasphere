@@ -1,7 +1,43 @@
 //!
-//! Library for hexagonally tiling a sphere.
+//! Library for subdividing shapes made of triangles.
 //!
-//! Note this is *not* an explicit rewrite of `hexasphere.js`.
+//! This library defines `Subdivided<T, S>`. This struct
+//! allows one to define a base shape using `S` and the
+//! `BaseShape` trait, and to subdivide it using the
+//! interpolation functions defined as part of `S`.
+//!
+//! This includes a few base shapes:
+//!
+//! - Icosahedron
+//! - Tetrahedron
+//! - Square
+//! - Triangle
+//!
+//! ## Example usage
+//!
+//! ```rs
+//! use hexasphere::IcoSphere;
+//!
+//! fn main() {
+//!     // Create a new sphere with 20 subdivisions
+//!     // an no data associated with the vertices.
+//!     let sphere = IcoSphere::new(20, || ());
+//!
+//!     let points = sphere.raw_points();
+//!     for p in points {
+//!         println!("{:?} is a point on the sphere!", p);
+//!     }
+//!     let indices = sphere.get_all_indices();
+//!     for triangle in indices.chunks(3) {
+//!         println!(
+//!             "[{}, {}, {}] is a triangle on the resulting shape",
+//!             triangle[0],
+//!             triangle[1],
+//!             triangle[2],
+//!         );
+//!     }
+//! }
+//! ```
 //!
 
 use glam::Vec3A;
