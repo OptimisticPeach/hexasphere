@@ -47,7 +47,6 @@
 
 use glam::Vec3A;
 use core::ops::Index;
-use core::marker::PhantomData;
 
 use Slice::*;
 
@@ -71,25 +70,25 @@ pub use adjacency::*;
 ///
 /// impl BaseShape for FlatIcosahedron {
 ///     // Keep the initial parameters.
-///     fn initial_points() -> &'static [Vec3A] {
-///         IcoSphereBase::initial_points()
+///     fn initial_points(&self) -> &[Vec3A] {
+///         IcoSphereBase.initial_points()
 ///     }
 ///
-///     fn triangles() -> &'static [Triangle] {
-///         IcoSphereBase::triangles()
+///     fn triangles(&self) -> &[Triangle] {
+///         IcoSphereBase.triangles()
 ///     }
 ///     const EDGES: usize = IcoSphereBase::EDGES;
 ///
 ///     // Swap out what you'd like to change.
-///     fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+///     fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
 ///         hexasphere::lerp(a, b, p)
 ///     }
 ///
-///     fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+///     fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
 ///         hexasphere::lerp_half(a, b)
 ///     }
 ///
-///     fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+///     fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
 ///         hexasphere::lerp_multiple(a, b, indices, points);
 ///     }
 /// }
@@ -119,7 +118,7 @@ pub trait BaseShape {
     /// - `normalized_lerp` requires normalized (magnitude 1)
     /// data.
     ///
-    fn initial_points() -> &'static [Vec3A];
+    fn initial_points(&self) -> &[Vec3A];
 
     ///
     /// Base triangles for the shape.
@@ -135,7 +134,7 @@ pub trait BaseShape {
     /// memory footprint and performance.
     /// - Triangles should be created through [`Triangle::new`].
     ///
-    fn triangles() -> &'static [Triangle];
+    fn triangles(&self) -> &[Triangle];
 
     ///
     /// Number of unique edges defined in the contents of
@@ -168,15 +167,15 @@ pub trait BaseShape {
     /// [`geometric_slerp`]: ../fn.geometric_slerp.html
     /// [`normalized_lerp`]: ../fn.normalized_lerp.html
     ///
-    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
 
     ///
     /// If an optimization is available for the case where `p`
     /// is `0.5`, this function should implement it. This defaults
     /// to calling `interpolate(a, b, 0.5)` however.
     ///
-    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
-        Self::interpolate(a, b, 0.5)
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+        self.interpolate(a, b, 0.5)
     }
 
     ///
@@ -194,11 +193,11 @@ pub trait BaseShape {
     /// - `points`: list of points where the results of the calculation
     /// should end up. To be indexed by values in `indices`.
     ///
-    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         for (percent, index) in indices.iter().enumerate() {
             let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
 
-            points[*index as usize] = Self::interpolate(a, b, percent);
+            points[*index as usize] = self.interpolate(a, b, percent);
         }
     }
 }
@@ -243,32 +242,33 @@ pub trait EquilateralBaseShape: BaseShape {
 /// of the each triangle to the middle of the each edge
 /// then the result will be 12 pentagons and many hexagons.
 ///
+#[derive(Default, Copy, Clone, Debug)]
 pub struct IcoSphereBase;
 
 impl BaseShape for IcoSphereBase {
     #[inline]
-    fn initial_points() -> &'static [Vec3A] {
+    fn initial_points(&self) -> &'static [Vec3A] {
         &*consts::icosphere::INITIAL_POINTS
     }
 
     #[inline]
-    fn triangles() -> &'static [Triangle] {
+    fn triangles(&self) -> &'static [Triangle] {
         &consts::icosphere::TRIANGLES
     }
     const EDGES: usize = consts::icosphere::EDGES;
 
     #[inline]
-    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
         geometric_slerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
         geometric_slerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A])  {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A])  {
         geometric_slerp_multiple(a, b, indices, points);
     }
 }
@@ -311,32 +311,33 @@ pub type IcoSphere<T> = Subdivided<T, IcoSphereBase>;
 /// I recommend that subdivisions of higher than 10
 /// be used for acceptable results.
 ///
+#[derive(Default, Copy, Clone, Debug)]
 pub struct TetraSphereBase;
 
 impl BaseShape for TetraSphereBase {
     #[inline]
-    fn initial_points() -> &'static [Vec3A] {
+    fn initial_points(&self) -> &'static [Vec3A] {
         &*consts::tetrasphere::INITIAL_POINTS
     }
 
     #[inline]
-    fn triangles() -> &'static [Triangle] {
+    fn triangles(&self) -> &'static [Triangle] {
         &consts::tetrasphere::TRIANGLES
     }
     const EDGES: usize = consts::tetrasphere::EDGES;
 
     #[inline]
-    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
         geometric_slerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
         geometric_slerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         geometric_slerp_multiple(a, b, indices, points);
     }
 }
@@ -372,32 +373,33 @@ pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
 /// to preserve accuracy of the subdivisions at higher
 /// levels of subdivision.
 ///
+#[derive(Default, Copy, Clone, Debug)]
 pub struct TriangleBase;
 
 impl BaseShape for TriangleBase {
     #[inline]
-    fn initial_points() -> &'static [Vec3A] {
+    fn initial_points(&self) -> &'static [Vec3A] {
         &*consts::triangle::INITIAL_POINTS
     }
 
     #[inline]
-    fn triangles() -> &'static [Triangle] {
+    fn triangles(&self) -> &'static [Triangle] {
         core::slice::from_ref(&consts::triangle::TRIANGLE)
     }
     const EDGES: usize = consts::triangle::EDGES;
 
     #[inline]
-    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
         lerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
         lerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         lerp_multiple(a, b, indices, points);
     }
 }
@@ -433,32 +435,33 @@ pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 /// preserve the accuracy of the subdivisions at higher
 /// levels of subdivision.
 ///
+#[derive(Default, Copy, Clone, Debug)]
 pub struct SquareBase;
 
 impl BaseShape for SquareBase {
     #[inline]
-    fn initial_points() -> &'static [Vec3A] {
+    fn initial_points(&self) -> &'static [Vec3A] {
         &*consts::square::INITIAL_POINTS
     }
 
     #[inline]
-    fn triangles() -> &'static [Triangle] {
+    fn triangles(&self) -> &'static [Triangle] {
         &consts::square::TRIANGLES
     }
     const EDGES: usize = consts::square::EDGES;
 
     #[inline]
-    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
         lerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
         lerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         lerp_multiple(a, b, indices, points);
     }
 }
@@ -481,32 +484,33 @@ pub type SquarePlane<T> = Subdivided<T, SquareBase>;
 /// to preserve the accuracy of the subdivisions at higher levels
 /// of subdivision.
 ///
+#[derive(Default, Copy, Clone, Debug)]
 pub struct CubeBase;
 
 impl BaseShape for CubeBase {
     #[inline]
-    fn initial_points() -> &'static [Vec3A] {
+    fn initial_points(&self) -> &'static [Vec3A] {
         &*consts::cube::INITIAL_POINTS
     }
 
     #[inline]
-    fn triangles() -> &'static [Triangle] {
+    fn triangles(&self) -> &'static [Triangle] {
         &consts::cube::TRIANGLES
     }
     const EDGES: usize = consts::cube::EDGES;
 
     #[inline]
-    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
         geometric_slerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
         geometric_slerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         geometric_slerp_multiple(a, b, indices, points);
     }
 }
@@ -606,14 +610,14 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one<S: BaseShape>(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool) -> Self {
+    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool, shape: &impl BaseShape) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
         let p2 = points[bc[1] as usize];
         let index = points.len() as u32;
         if calculate {
-            points.push(S::interpolate_half(p1, p2));
+            points.push(shape.interpolate_half(p1, p2));
         } else {
             points.push(Vec3A::zero());
         }
@@ -623,13 +627,14 @@ impl TriangleContents {
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three<S: BaseShape>(
+    fn three(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
         ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
         calculate: bool,
+        shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
 
@@ -644,9 +649,9 @@ impl TriangleContents {
                 let ca = points[ca[1] as usize];
 
                 if calculate {
-                    let a = S::interpolate_half(ab, ca);
-                    let b = S::interpolate_half(bc, ab);
-                    let c = S::interpolate_half(ca, bc);
+                    let a = shape.interpolate_half(ab, ca);
+                    let b = shape.interpolate_half(bc, ab);
+                    let c = shape.interpolate_half(ca, bc);
 
                     points.extend_from_slice(&[b, c]);
                     points[x as usize] = a;
@@ -667,13 +672,14 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six<S: BaseShape>(
+    fn six(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
         ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
         calculate: bool,
+        shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
 
@@ -695,13 +701,13 @@ impl TriangleContents {
                 let caa = points[ca[2] as usize];
 
                 if calculate {
-                    let a = S::interpolate_half(aba, caa);
-                    let b = S::interpolate_half(abb, bcb);
-                    let c = S::interpolate_half(bcc, cac);
+                    let a = shape.interpolate_half(aba, caa);
+                    let b = shape.interpolate_half(abb, bcb);
+                    let c = shape.interpolate_half(bcc, cac);
 
-                    let ab = S::interpolate_half(a, b);
-                    let bc = S::interpolate_half(b, c);
-                    let ca = S::interpolate_half(c, a);
+                    let ab = shape.interpolate_half(a, b);
+                    let bc = shape.interpolate_half(b, c);
+                    let ca = shape.interpolate_half(c, a);
 
                     points[a_index as usize] = a;
                     points[b_index as usize] = b;
@@ -727,22 +733,23 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide<S: BaseShape>(
+    pub fn subdivide(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
         ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
         calculate: bool,
+        shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), ca.len());
         assert!(ab.len() >= 2);
         match self {
-            None => *self = Self::one::<S>(ab, bc, points, calculate),
-            One(_) => self.three::<S>(ab, bc, ca, points, calculate),
-            Three { .. } => self.six::<S>(ab, bc, ca, points, calculate),
+            None => *self = Self::one(ab, bc, points, calculate, shape),
+            One(_) => self.three(ab, bc, ca, points, calculate, shape),
+            Three { .. } => self.six(ab, bc, ca, points, calculate, shape),
             &mut Six {
                 a,
                 b,
@@ -759,7 +766,7 @@ impl TriangleContents {
                     my_side_length: 1,
                     contents: Box::new(Self::none()),
                 };
-                self.subdivide::<S>(ab, bc, ca, points, calculate);
+                self.subdivide(ab, bc, ca, points, calculate, shape);
             }
             &mut More {
                 a: a_idx,
@@ -785,9 +792,9 @@ impl TriangleContents {
                 let caa = points[ca[outer_len - 2] as usize];
 
                 if calculate {
-                    points[a_idx as usize] = S::interpolate_half(aba, caa);
-                    points[b_idx as usize] = S::interpolate_half(abb, bcb);
-                    points[c_idx as usize] = S::interpolate_half(bcc, cac);
+                    points[a_idx as usize] = shape.interpolate_half(aba, caa);
+                    points[b_idx as usize] = shape.interpolate_half(abb, bcb);
+                    points[c_idx as usize] = shape.interpolate_half(bcc, cac);
                 }
 
                 let ab = &sides[0..side_length];
@@ -795,19 +802,19 @@ impl TriangleContents {
                 let ca = &sides[side_length * 2..];
 
                 if calculate {
-                    S::interpolate_multiple(
+                    shape.interpolate_multiple(
                         points[a_idx as usize],
                         points[b_idx as usize],
                         ab,
                         points,
                     );
-                    S::interpolate_multiple(
+                    shape.interpolate_multiple(
                         points[b_idx as usize],
                         points[c_idx as usize],
                         bc,
                         points,
                     );
-                    S::interpolate_multiple(
+                    shape.interpolate_multiple(
                         points[c_idx as usize],
                         points[a_idx as usize],
                         ca,
@@ -815,7 +822,7 @@ impl TriangleContents {
                     );
                 }
 
-                contents.subdivide::<S>(Forward(ab), Forward(bc), Forward(ca), points, calculate);
+                contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points, calculate, shape);
             }
         }
     }
@@ -1085,11 +1092,12 @@ impl Triangle {
     /// and records the direction in which the values should
     /// be read in the `*_forward` values.
     ///
-    fn subdivide_edges<'a, S: BaseShape>(
+    fn subdivide_edges<'a>(
         &'a mut self,
         edges: &mut [Edge],
         points: &mut Vec<Vec3A>,
         calculate: bool,
+        shape: &impl BaseShape,
     ) -> usize {
         let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
             if !edges[edge_idx].done {
@@ -1097,7 +1105,7 @@ impl Triangle {
                 points.push(Vec3A::zero());
 
                 if calculate {
-                    S::interpolate_multiple(
+                    shape.interpolate_multiple(
                         points[p1 as usize],
                         points[p2 as usize],
                         &edges[edge_idx].points,
@@ -1126,13 +1134,14 @@ impl Triangle {
     /// simply added to the buffer and the indices recorded,
     /// but no calculations are performed.
     ///
-    fn subdivide<S: BaseShape>(
+    fn subdivide(
         &mut self,
         edges: &mut [Edge],
         points: &mut Vec<Vec3A>,
         calculate: bool,
+        shape: &impl BaseShape,
     ) {
-        let side_length = self.subdivide_edges::<S>(edges, points, calculate) + 1;
+        let side_length = self.subdivide_edges(edges, points, calculate, shape) + 1;
 
         if side_length > 2 {
             let ab = if self.ab_forward {
@@ -1150,7 +1159,7 @@ impl Triangle {
             } else {
                 Backward(&edges[self.ca_edge].points)
             };
-            self.contents.subdivide::<S>(ab, bc, ca, points, calculate);
+            self.contents.subdivide(ab, bc, ca, points, calculate, shape);
         }
     }
 
@@ -1199,7 +1208,13 @@ pub struct Subdivided<T, S: BaseShape> {
     triangles: Box<[Triangle]>,
     shared_edges: Box<[Edge]>,
     subdivisions: usize,
-    _phantom: PhantomData<S>,
+    shape: S,
+}
+
+impl<T, S: BaseShape + Default> Subdivided<T, S> {
+    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
+        Self::new_custom_shape(subdivisions, generator, Default::default())
+    }
 }
 
 impl<T, S: BaseShape> Subdivided<T, S> {
@@ -1213,18 +1228,18 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// - `generator` is a function run once all the subdivisions are
     /// applied and its values are stored in an internal `Vec`.
     ///
-    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
+    pub fn new_custom_shape(subdivisions: usize, generator: impl FnMut(Vec3A) -> T, shape: S) -> Self {
         let mut this = Self {
-            points: S::initial_points().into(),
+            points: shape.initial_points().into(),
             shared_edges: {
                 let mut edges = Vec::new();
                 edges.resize_with(S::EDGES, Edge::default);
                 edges.into_boxed_slice()
             },
-            triangles: S::triangles().to_vec().into_boxed_slice(),
+            triangles: shape.triangles().to_vec().into_boxed_slice(),
             subdivisions: 1,
             data: vec![],
-            _phantom: PhantomData
+            shape,
         };
 
         match subdivisions {
@@ -1255,7 +1270,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
 
         for triangle in &mut *self.triangles {
-            triangle.subdivide::<S>(&mut *self.shared_edges, &mut self.points, calculate);
+            triangle.subdivide(&mut *self.shared_edges, &mut self.points, calculate, &self.shape);
         }
     }
 
@@ -1373,7 +1388,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// ```
     ///
     pub fn shared_vertices(&self) -> usize {
-        self.subdivisions * S::EDGES + S::initial_points().len()
+        self.subdivisions * S::EDGES + self.shape.initial_points().len()
     }
 
     ///
