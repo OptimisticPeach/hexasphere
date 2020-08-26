@@ -24,6 +24,7 @@ function to preserve their accuracy.
   - Tetrahedron
   - Triangle
   - Square
+  - Cube
 - Interpolation functions
   - Spherical interpolation
   - Linear interpolation

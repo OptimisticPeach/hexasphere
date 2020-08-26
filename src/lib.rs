@@ -12,6 +12,7 @@
 //! - Tetrahedron
 //! - Square
 //! - Triangle
+//! - Cube
 //!
 //! ## Example usage
 //!
@@ -468,6 +469,54 @@ impl BaseShape for SquareBase {
 /// See [`SquareBase`].
 ///
 pub type SquarePlane<T> = Subdivided<T, SquareBase>;
+
+///
+/// Implements a cube as the base shape.
+///
+/// - 8 vertices
+/// - 12 faces (2 triangles per face makes 12 technically)
+/// - 18 edges
+///
+/// This is a cube where half the diagonal is 1.0. This is done
+/// to preserve the accuracy of the subdivisions at higher levels
+/// of subdivision.
+///
+pub struct CubeBase;
+
+impl BaseShape for CubeBase {
+    #[inline]
+    fn initial_points() -> &'static [Vec3A] {
+        &*consts::cube::INITIAL_POINTS
+    }
+
+    #[inline]
+    fn triangles() -> &'static [Triangle] {
+        &consts::cube::TRIANGLES
+    }
+    const EDGES: usize = consts::cube::EDGES;
+
+    #[inline]
+    fn interpolate(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        geometric_slerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(a: Vec3A, b: Vec3A) -> Vec3A {
+        geometric_slerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        geometric_slerp_multiple(a, b, indices, points);
+    }
+}
+
+///
+/// A cube sphere.
+///
+/// See [`CubeBase`].
+///
+pub type CubeSphere<T> = Subdivided<T, CubeBase>;
 
 ///
 /// The edge between two main triangles.
@@ -1913,7 +1962,7 @@ mod tests {
 }
 
 ///
-/// Constant values for the
+/// Constant values for the shapes provided by this library.
 ///
 mod consts {
     pub mod square {
@@ -2031,11 +2080,24 @@ mod consts {
             Triangle {
                 a: 0,
                 b: 1,
-                c: 3,
+                c: 2,
 
                 ab_edge: 0,
+                bc_edge: 1,
+                ca_edge: 2,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 0,
+                b: 3,
+                c: 1,
+
+                ab_edge: 3,
                 bc_edge: 4,
-                ca_edge: 3,
+                ca_edge: 0,
                 ab_forward: false,
                 bc_forward: false,
                 ca_forward: false,
@@ -2043,25 +2105,12 @@ mod consts {
             },
             Triangle {
                 a: 1,
-                b: 2,
-                c: 3,
+                b: 3,
+                c: 2,
 
-                ab_edge: 1,
+                ab_edge: 4,
                 bc_edge: 5,
-                ca_edge: 4,
-                ab_forward: false,
-                bc_forward: false,
-                ca_forward: false,
-                contents: TriangleContents::None,
-            },
-            Triangle {
-                a: 2,
-                b: 0,
-                c: 3,
-
-                ab_edge: 2,
-                bc_edge: 3,
-                ca_edge: 5,
+                ca_edge: 1,
                 ab_forward: false,
                 bc_forward: false,
                 ca_forward: false,
@@ -2070,11 +2119,11 @@ mod consts {
             Triangle {
                 a: 0,
                 b: 2,
-                c: 1,
+                c: 3,
 
                 ab_edge: 2,
-                bc_edge: 1,
-                ca_edge: 0,
+                bc_edge: 5,
+                ca_edge: 3,
                 ab_forward: false,
                 bc_forward: false,
                 ca_forward: false,
@@ -2083,6 +2132,193 @@ mod consts {
             }
         ];
         pub(crate) const EDGES: usize = 6;
+    }
+    pub mod cube {
+        use crate::{Triangle, TriangleContents};
+        use glam::Vec3A;
+
+        const VALUE: f32 = 0.57735025882720947266; // 1 / sqrt(3)
+
+        lazy_static::lazy_static! {
+            pub(crate) static ref INITIAL_POINTS: [Vec3A; 8] = [
+                Vec3A::new(-VALUE, -VALUE, -VALUE),
+                Vec3A::new( VALUE, -VALUE, -VALUE),
+                Vec3A::new(-VALUE,  VALUE, -VALUE),
+                Vec3A::new( VALUE,  VALUE, -VALUE),
+
+                Vec3A::new(-VALUE, -VALUE,  VALUE),
+                Vec3A::new( VALUE, -VALUE,  VALUE),
+                Vec3A::new(-VALUE,  VALUE,  VALUE),
+                Vec3A::new( VALUE,  VALUE,  VALUE),
+            ];
+        }
+
+        pub(crate) const TRIANGLES: [Triangle; 12] = [
+            // Back
+            Triangle {
+                a: 0,
+                b: 2,
+                c: 3,
+
+                ab_edge: 1,
+                bc_edge: 2,
+                ca_edge: 12,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 0,
+                b: 3,
+                c: 1,
+
+                ab_edge: 12,
+                bc_edge: 3,
+                ca_edge: 0,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            // Top
+            Triangle {
+                a: 2,
+                b: 7,
+                c: 3,
+
+                ab_edge: 14,
+                bc_edge: 6,
+                ca_edge: 2,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 2,
+                b: 6,
+                c: 7,
+
+                ab_edge: 5,
+                bc_edge: 10,
+                ca_edge: 14,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            // Left
+            Triangle {
+                a: 4,
+                b: 2,
+                c: 0,
+
+                ab_edge: 13,
+                bc_edge: 1,
+                ca_edge: 4,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 4,
+                b: 6,
+                c: 2,
+
+                ab_edge: 9,
+                bc_edge: 5,
+                ca_edge: 13,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            // Bottom
+            Triangle {
+                a: 1,
+                b: 5,
+                c: 4,
+
+                ab_edge: 7,
+                bc_edge: 8,
+                ca_edge: 16,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 1,
+                b: 4,
+                c: 0,
+
+                ab_edge: 16,
+                bc_edge: 4,
+                ca_edge: 0,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            // Right
+            Triangle {
+                a: 1,
+                b: 7,
+                c: 5,
+
+                ab_edge: 15,
+                bc_edge: 11,
+                ca_edge: 7,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 1,
+                b: 3,
+                c: 7,
+
+                ab_edge: 3,
+                bc_edge: 6,
+                ca_edge: 15,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            // Front
+            Triangle {
+                a: 5,
+                b: 6,
+                c: 4,
+
+                ab_edge: 17,
+                bc_edge: 9,
+                ca_edge: 8,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+            Triangle {
+                a: 5,
+                b: 7,
+                c: 6,
+
+                ab_edge: 11,
+                bc_edge: 10,
+                ca_edge: 17,
+                ab_forward: false,
+                bc_forward: false,
+                ca_forward: false,
+                contents: TriangleContents::None,
+            },
+        ];
+
+        pub(crate) const EDGES: usize = 18;
     }
     pub mod icosphere {
         use crate::{Triangle, TriangleContents};
