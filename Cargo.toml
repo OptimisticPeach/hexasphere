@@ -1,7 +1,7 @@
 [package]
 name = "hexasphere"
 version = "1.0.0"
-authors = ["OptimisticPeach <patrikbuhring@yahoo.com>"]
+authors = ["OptimisticPeach <patrikbuhring@gmail.com>"]
 edition = "2018"
 description = """
 A library to evenly tile hexagons on a sphere.
