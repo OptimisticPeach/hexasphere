@@ -18,7 +18,7 @@ categories = ["algorithms", "data-structures", "graphics", "mathematics", "rende
 adjacency = ["smallvec"]
 
 [dependencies]
-glam = "0.9"
+glam = "0.10.0"
 lazy_static = "1.4"
 
 smallvec = { version = "1.4.2", optional = true }
