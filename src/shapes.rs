@@ -6,7 +6,7 @@ use super::{
     Subdivided,
 
 };
-use glam::Vec3A;
+use glam::{Vec3A, Quat};
 
 ///
 /// Implements an icosahedron as the base shape.
@@ -27,13 +27,13 @@ pub struct IcoSphereBase;
 
 impl BaseShape for IcoSphereBase {
     #[inline]
-    fn initial_points(&self) -> &'static [Vec3A] {
-        &*consts::icosphere::INITIAL_POINTS
+    fn initial_points(&self) -> Vec<Vec3A> {
+        consts::icosphere::INITIAL_POINTS.to_vec()
     }
 
     #[inline]
-    fn triangles(&self) -> &'static [Triangle] {
-        &consts::icosphere::TRIANGLES
+    fn triangles(&self) -> Box<[Triangle]> {
+        consts::icosphere::TRIANGLES.into()
     }
     const EDGES: usize = consts::icosphere::EDGES;
 
@@ -105,13 +105,13 @@ pub struct TetraSphereBase;
 
 impl BaseShape for TetraSphereBase {
     #[inline]
-    fn initial_points(&self) -> &'static [Vec3A] {
-        &*consts::tetrasphere::INITIAL_POINTS
+    fn initial_points(&self) -> Vec<Vec3A> {
+        consts::tetrasphere::INITIAL_POINTS.to_vec()
     }
 
     #[inline]
-    fn triangles(&self) -> &'static [Triangle] {
-        &consts::tetrasphere::TRIANGLES
+    fn triangles(&self) -> Box<[Triangle]> {
+        consts::tetrasphere::TRIANGLES.into()
     }
     const EDGES: usize = consts::tetrasphere::EDGES;
 
@@ -167,13 +167,13 @@ pub struct TriangleBase;
 
 impl BaseShape for TriangleBase {
     #[inline]
-    fn initial_points(&self) -> &'static [Vec3A] {
-        &*consts::triangle::INITIAL_POINTS
+    fn initial_points(&self) -> Vec<Vec3A> {
+        consts::triangle::INITIAL_POINTS.to_vec()
     }
 
     #[inline]
-    fn triangles(&self) -> &'static [Triangle] {
-        core::slice::from_ref(&consts::triangle::TRIANGLE)
+    fn triangles(&self) -> Box<[Triangle]> {
+        core::slice::from_ref(&consts::triangle::TRIANGLE).to_vec().into()
     }
     const EDGES: usize = consts::triangle::EDGES;
 
@@ -229,13 +229,13 @@ pub struct SquareBase;
 
 impl BaseShape for SquareBase {
     #[inline]
-    fn initial_points(&self) -> &'static [Vec3A] {
-        &*consts::square::INITIAL_POINTS
+    fn initial_points(&self) -> Vec<Vec3A> {
+        consts::square::INITIAL_POINTS.to_vec()
     }
 
     #[inline]
-    fn triangles(&self) -> &'static [Triangle] {
-        &consts::square::TRIANGLES
+    fn triangles(&self) -> Box<[Triangle]> {
+        consts::square::TRIANGLES.to_vec().into()
     }
     const EDGES: usize = consts::square::EDGES;
 
@@ -278,13 +278,13 @@ pub struct CubeBase;
 
 impl BaseShape for CubeBase {
     #[inline]
-    fn initial_points(&self) -> &'static [Vec3A] {
-        &*consts::cube::INITIAL_POINTS
+    fn initial_points(&self) -> Vec<Vec3A> {
+        consts::cube::INITIAL_POINTS.to_vec()
     }
 
     #[inline]
-    fn triangles(&self) -> &'static [Triangle] {
-        &consts::cube::TRIANGLES
+    fn triangles(&self) -> Box<[Triangle]> {
+        consts::cube::TRIANGLES.to_vec().into()
     }
     const EDGES: usize = consts::cube::EDGES;
 
@@ -310,6 +310,67 @@ impl BaseShape for CubeBase {
 /// See [`CubeBase`].
 ///
 pub type CubeSphere<T> = Subdivided<T, CubeBase>;
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct DonutBase {
+    pub radius: f32,
+    pub thickness_radius: f32,
+}
+
+impl Default for DonutBase {
+    fn default() -> Self {
+        Self {
+            radius: 1.0,
+            thickness_radius: 0.5,
+        }
+    }
+}
+
+impl BaseShape for DonutBase {
+    #[inline]
+    fn initial_points(&self) -> Vec<Vec3A> {
+        let mut points = Vec::with_capacity(25);
+
+        for i in 0..5 {
+            let quat = Quat::from_rotation_y((i as f32 / 5.0) * std::f32::consts::TAU);
+
+            let center = quat.mul_vec3a(Vec3A::new(1.0, 0.0, 0.0)) * self.radius;
+
+            for j in 0..5 {
+                let (y, w) = ((j as f32 / 5.0) * std::f32::consts::TAU).sin_cos();
+
+                let change = quat.mul_vec3a(Vec3A::new(w, y, 0.0));
+
+                let point = center + change * self.thickness_radius;
+
+                points.push(point);
+            }
+        }
+
+        points
+    }
+
+    #[inline]
+    fn triangles(&self) -> Box<[Triangle]> {
+        consts::cube::TRIANGLES.to_vec().into()
+    }
+    const EDGES: usize = consts::cube::EDGES;
+
+    #[inline]
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        interpolation::geometric_slerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+        interpolation::geometric_slerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        interpolation::geometric_slerp_multiple(a, b, indices, points);
+    }
+}
 
 ///
 /// Constant values for the shapes provided by this library.
@@ -1053,5 +1114,8 @@ mod consts {
         ];
 
         pub const EDGES: usize = 30;
+    }
+    pub mod torus {
+
     }
 }

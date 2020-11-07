@@ -122,7 +122,7 @@ pub trait BaseShape {
     /// - `normalized_lerp` requires normalized (magnitude 1)
     /// data.
     ///
-    fn initial_points(&self) -> &[Vec3A];
+    fn initial_points(&self) -> Vec<Vec3A>;
 
     ///
     /// Base triangles for the shape.
@@ -138,7 +138,7 @@ pub trait BaseShape {
     /// memory footprint and performance.
     /// - Triangles should be created through [`Triangle::new`].
     ///
-    fn triangles(&self) -> &[Triangle];
+    fn triangles(&self) -> Box<[Triangle]>;
 
     ///
     /// Number of unique edges defined in the contents of
@@ -908,13 +908,13 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     pub fn new_custom_shape(subdivisions: usize, generator: impl FnMut(Vec3A) -> T, shape: S) -> Self {
         let mut this = Self {
-            points: shape.initial_points().into(),
+            points: shape.initial_points(),
             shared_edges: {
                 let mut edges = Vec::new();
                 edges.resize_with(S::EDGES, Edge::default);
                 edges.into_boxed_slice()
             },
-            triangles: shape.triangles().to_vec().into_boxed_slice(),
+            triangles: shape.triangles(),
             subdivisions: 1,
             data: vec![],
             shape,
