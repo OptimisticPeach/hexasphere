@@ -74,11 +74,11 @@ mod slice;
 ///
 /// impl BaseShape for FlatIcosahedron {
 ///     // Keep the initial parameters.
-///     fn initial_points(&self) -> &[Vec3A] {
+///     fn initial_points(&self) -> Vec<Vec3A> {
 ///         IcoSphereBase.initial_points()
 ///     }
 ///
-///     fn triangles(&self) -> &[Triangle] {
+///     fn triangles(&self) -> Box<[Triangle]> {
 ///         IcoSphereBase.triangles()
 ///     }
 ///     const EDGES: usize = IcoSphereBase::EDGES;

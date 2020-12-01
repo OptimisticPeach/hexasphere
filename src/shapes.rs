@@ -6,7 +6,7 @@ use super::{
     Subdivided,
 
 };
-use glam::{Vec3A, Quat};
+use glam::Vec3A;
 
 ///
 /// Implements an icosahedron as the base shape.
@@ -158,9 +158,7 @@ pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
 /// - 3 edges
 ///
 /// This is a triangle on the XZ plane. The circumscribed
-/// circle on the triangle has radius 1.0. This is done
-/// to preserve accuracy of the subdivisions at higher
-/// levels of subdivision.
+/// circle on the triangle has radius 1.0.
 ///
 #[derive(Default, Copy, Clone, Debug)]
 pub struct TriangleBase;
@@ -219,10 +217,7 @@ pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 /// - 2 faces
 /// - 5 edges
 ///
-/// This is a square on the XZ plane. The circumscribed
-/// circle on the square has radius 1.0. This is done to
-/// preserve the accuracy of the subdivisions at higher
-/// levels of subdivision.
+/// This is a square on the XZ plane.
 ///
 #[derive(Default, Copy, Clone, Debug)]
 pub struct SquareBase;
@@ -269,9 +264,8 @@ pub type SquarePlane<T> = Subdivided<T, SquareBase>;
 /// - 12 faces (2 triangles per face makes 12 technically)
 /// - 18 edges
 ///
-/// This is a cube where half the diagonal is 1.0. This is done
-/// to preserve the accuracy of the subdivisions at higher levels
-/// of subdivision.
+/// This is a cube where half the diagonal is 1.0. This is to
+/// enable this to be used in making a sphere.
 ///
 #[derive(Default, Copy, Clone, Debug)]
 pub struct CubeBase;
@@ -311,67 +305,6 @@ impl BaseShape for CubeBase {
 ///
 pub type CubeSphere<T> = Subdivided<T, CubeBase>;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct DonutBase {
-    pub radius: f32,
-    pub thickness_radius: f32,
-}
-
-impl Default for DonutBase {
-    fn default() -> Self {
-        Self {
-            radius: 1.0,
-            thickness_radius: 0.5,
-        }
-    }
-}
-
-impl BaseShape for DonutBase {
-    #[inline]
-    fn initial_points(&self) -> Vec<Vec3A> {
-        let mut points = Vec::with_capacity(25);
-
-        for i in 0..5 {
-            let quat = Quat::from_rotation_y((i as f32 / 5.0) * std::f32::consts::TAU);
-
-            let center = quat.mul_vec3a(Vec3A::new(1.0, 0.0, 0.0)) * self.radius;
-
-            for j in 0..5 {
-                let (y, w) = ((j as f32 / 5.0) * std::f32::consts::TAU).sin_cos();
-
-                let change = quat.mul_vec3a(Vec3A::new(w, y, 0.0));
-
-                let point = center + change * self.thickness_radius;
-
-                points.push(point);
-            }
-        }
-
-        points
-    }
-
-    #[inline]
-    fn triangles(&self) -> Box<[Triangle]> {
-        consts::cube::TRIANGLES.to_vec().into()
-    }
-    const EDGES: usize = consts::cube::EDGES;
-
-    #[inline]
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
-        interpolation::geometric_slerp(a, b, p)
-    }
-
-    #[inline]
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
-        interpolation::geometric_slerp_half(a, b)
-    }
-
-    #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
-        interpolation::geometric_slerp_multiple(a, b, indices, points);
-    }
-}
-
 ///
 /// Constant values for the shapes provided by this library.
 ///
@@ -382,10 +315,10 @@ mod consts {
 
         lazy_static::lazy_static! {
             pub(crate) static ref INITIAL_POINTS: [Vec3A; 4] = [
-                Vec3A::new(std::f32::consts::FRAC_1_SQRT_2, 0.0, std::f32::consts::FRAC_1_SQRT_2),
-                Vec3A::new(std::f32::consts::FRAC_1_SQRT_2, 0.0, -std::f32::consts::FRAC_1_SQRT_2),
-                Vec3A::new(-std::f32::consts::FRAC_1_SQRT_2, 0.0, -std::f32::consts::FRAC_1_SQRT_2),
-                Vec3A::new(-std::f32::consts::FRAC_1_SQRT_2, 0.0, std::f32::consts::FRAC_1_SQRT_2),
+                Vec3A::new(1.0, 0.0, 1.0),
+                Vec3A::new(1.0, 0.0, -1.0),
+                Vec3A::new(-1.0, 0.0, -1.0),
+                Vec3A::new(-1.0, 0.0, 1.0),
             ];
 
             pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 2] = [
@@ -548,19 +481,17 @@ mod consts {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
 
-        const VALUE: f32 = 0.57735025882720947266; // 1 / sqrt(3)
-
         lazy_static::lazy_static! {
             pub(crate) static ref INITIAL_POINTS: [Vec3A; 8] = [
-                Vec3A::new(-VALUE, -VALUE, -VALUE),
-                Vec3A::new( VALUE, -VALUE, -VALUE),
-                Vec3A::new(-VALUE,  VALUE, -VALUE),
-                Vec3A::new( VALUE,  VALUE, -VALUE),
+                Vec3A::new(-1.0, -1.0, -1.0),
+                Vec3A::new( 1.0, -1.0, -1.0),
+                Vec3A::new(-1.0,  1.0, -1.0),
+                Vec3A::new( 1.0,  1.0, -1.0),
 
-                Vec3A::new(-VALUE, -VALUE,  VALUE),
-                Vec3A::new( VALUE, -VALUE,  VALUE),
-                Vec3A::new(-VALUE,  VALUE,  VALUE),
-                Vec3A::new( VALUE,  VALUE,  VALUE),
+                Vec3A::new(-1.0, -1.0,  1.0),
+                Vec3A::new( 1.0, -1.0,  1.0),
+                Vec3A::new(-1.0,  1.0,  1.0),
+                Vec3A::new( 1.0,  1.0,  1.0),
             ];
         }
 
@@ -1114,8 +1045,5 @@ mod consts {
         ];
 
         pub const EDGES: usize = 30;
-    }
-    pub mod torus {
-
     }
 }

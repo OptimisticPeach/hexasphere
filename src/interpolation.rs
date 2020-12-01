@@ -21,19 +21,14 @@ pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
 pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
-    let angle = a.dot(b).acos();
-
-    let sin_denom = angle.sin().recip();
-    let sin_numer = (angle * 0.5).sin();
-
-    (a + b) * sin_denom * sin_numer
+    (a + b) * (2.0 * (1.0 + a.dot(b))).sqrt().recip()
 }
 
 ///
 /// This is an optimization for the case where multiple points require the
 /// calculation of varying values of `p` for the same start and end points.
 ///
-/// See the intended use in [`BaseShape::interpolate_multiple`].
+/// See the intended use in [`BaseShape::interpolate_multiple`](crate::BaseShape::interpolate_multiple).
 ///
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
@@ -62,7 +57,7 @@ pub fn normalized_lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
 /// This is an optimization of `normalized_lerp` which avoids a multiplication.
 ///
 pub fn normalized_lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
-    ((a + b) * 0.5).normalize()
+    (a + b).normalize()
 }
 
 ///
