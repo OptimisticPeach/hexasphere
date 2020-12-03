@@ -33,7 +33,7 @@ impl BaseShape for IcoSphereBase {
 
     #[inline]
     fn triangles(&self) -> Box<[Triangle]> {
-        consts::icosphere::TRIANGLES.into()
+        Box::new(consts::icosphere::TRIANGLES)
     }
     const EDGES: usize = consts::icosphere::EDGES;
 
@@ -111,7 +111,7 @@ impl BaseShape for TetraSphereBase {
 
     #[inline]
     fn triangles(&self) -> Box<[Triangle]> {
-        consts::tetrasphere::TRIANGLES.into()
+        Box::new(consts::tetrasphere::TRIANGLES)
     }
     const EDGES: usize = consts::tetrasphere::EDGES;
 
