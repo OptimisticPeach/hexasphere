@@ -1,4 +1,4 @@
-use glam::f32::Vec3A;
+use crate::Vec3;
 
 ///
 /// Implements spherical interpolation along the great arc created by
@@ -7,7 +7,7 @@ use glam::f32::Vec3A;
 ///
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
-pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+pub fn geometric_slerp<V: Vec3>(a: V, b: V, p: f32) -> V {
     let angle = a.dot(b).acos();
 
     let sin = angle.sin().recip();
@@ -20,7 +20,7 @@ pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
 ///
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
-pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
+pub fn geometric_slerp_half<V: Vec3>(a: V, b: V) -> V {
     (a + b) * (2.0 * (1.0 + a.dot(b))).sqrt().recip()
 }
 
@@ -32,7 +32,7 @@ pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
 ///
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
-pub fn geometric_slerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+pub fn geometric_slerp_multiple<V: Vec3>(a: V, b: V, indices: &[u32], points: &mut [V]) {
     let angle = a.dot(b).acos();
     let sin = angle.sin().recip();
 
@@ -49,14 +49,14 @@ pub fn geometric_slerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
 /// compared with spherical interpolation along an arc, however this is most
 /// likely faster, as though this avoids expensive sin and acos calculations.
 ///
-pub fn normalized_lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+pub fn normalized_lerp<V: Vec3>(a: V, b: V, p: f32) -> V {
     ((1.0 - p) * a + p * b).normalize()
 }
 
 ///
 /// This is an optimization of `normalized_lerp` which avoids a multiplication.
 ///
-pub fn normalized_lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
+pub fn normalized_lerp_half<V: Vec3>(a: V, b: V) -> V {
     (a + b).normalize()
 }
 
@@ -65,7 +65,7 @@ pub fn normalized_lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
 /// essentially the same algorithm as `BaseShape` would without ever being
 /// reimplemented.
 ///
-pub fn normalized_lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+pub fn normalized_lerp_multiple<V: Vec3>(a: V, b: V, indices: &[u32], points: &mut [V]) {
     for (percent, index) in indices.iter().enumerate() {
         let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
 
@@ -76,14 +76,14 @@ pub fn normalized_lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mu
 ///
 /// Simple linear interpolation. No weirdness here.
 ///
-pub fn lerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+pub fn lerp<V: Vec3>(a: V, b: V, p: f32) -> V {
     (1.0 - p) * a + p * b
 }
 
 ///
 /// Gives the average of the two points.
 ///
-pub fn lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
+pub fn lerp_half<V: Vec3>(a: V, b: V) -> v {
     (a + b) * 0.5
 }
 
@@ -92,7 +92,7 @@ pub fn lerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
 /// essentially the same algorithm as `BaseShape` would without ever being
 /// reimplemented.
 ///
-pub fn lerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+pub fn lerp_multiple<V: Vec3>(a: V, b: V, indices: &[u32], points: &mut [V]) {
     for (percent, index) in indices.iter().enumerate() {
         let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
 

@@ -4,9 +4,8 @@ use super::{
     interpolation,
     EquilateralBaseShape,
     Subdivided,
-
+    Vec3,
 };
-use glam::Vec3A;
 
 ///
 /// Implements an icosahedron as the base shape.
@@ -25,9 +24,9 @@ use glam::Vec3A;
 #[derive(Default, Copy, Clone, Debug)]
 pub struct IcoSphereBase;
 
-impl BaseShape for IcoSphereBase {
+impl<V: Vec3> BaseShape<V> for IcoSphereBase {
     #[inline]
-    fn initial_points(&self) -> Vec<Vec3A> {
+    fn initial_points(&self) -> Vec<V> {
         consts::icosphere::INITIAL_POINTS.to_vec()
     }
 
@@ -38,24 +37,24 @@ impl BaseShape for IcoSphereBase {
     const EDGES: usize = consts::icosphere::EDGES;
 
     #[inline]
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: V, b: V, p: f32) -> V {
         interpolation::geometric_slerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: V, b: V) -> V {
         interpolation::geometric_slerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A])  {
+    fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V])  {
         interpolation::geometric_slerp_multiple(a, b, indices, points);
     }
 }
 
-impl EquilateralBaseShape for IcoSphereBase {
+impl<V: Vec3> EquilateralBaseShape<V> for IcoSphereBase {
     #[inline]
-    fn triangle_normals() -> &'static [Vec3A] {
+    fn triangle_normals() -> &'static [V] {
         &*consts::icosphere::TRIANGLE_NORMALS
     }
 
@@ -70,9 +69,9 @@ impl EquilateralBaseShape for IcoSphereBase {
 ///
 /// See [`IcoSphereBase`].
 ///
-pub type IcoSphere<T> = Subdivided<T, IcoSphereBase>;
+pub type IcoSphere<T, V: Vec3> = Subdivided<T, V, IcoSphereBase>;
 
-impl<T> IcoSphere<T> {
+impl<T, V: Vec3> IcoSphere<T, V> {
     ///
     /// Calculate distance from the center of a shape (pentagon or hexagon)
     /// to one of the vertices of the shape.
@@ -103,9 +102,9 @@ impl<T> IcoSphere<T> {
 #[derive(Default, Copy, Clone, Debug)]
 pub struct TetraSphereBase;
 
-impl BaseShape for TetraSphereBase {
+impl<V: Vec3> BaseShape<V> for TetraSphereBase {
     #[inline]
-    fn initial_points(&self) -> Vec<Vec3A> {
+    fn initial_points(&self) -> Vec<V> {
         consts::tetrasphere::INITIAL_POINTS.to_vec()
     }
 
@@ -116,24 +115,24 @@ impl BaseShape for TetraSphereBase {
     const EDGES: usize = consts::tetrasphere::EDGES;
 
     #[inline]
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: V, b: V, p: f32) -> V {
         interpolation::geometric_slerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: V, b: V) -> V {
         interpolation::geometric_slerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V]) {
         interpolation::geometric_slerp_multiple(a, b, indices, points);
     }
 }
 
-impl EquilateralBaseShape for TetraSphereBase {
+impl<V: Vec3> EquilateralBaseShape<V> for TetraSphereBase {
     #[inline]
-    fn triangle_normals() -> &'static [Vec3A] {
+    fn triangle_normals() -> &'static [V] {
         &*consts::tetrasphere::TRIANGLE_NORMALS
     }
 
@@ -148,7 +147,7 @@ impl EquilateralBaseShape for TetraSphereBase {
 ///
 /// See [`TetraSphereBase`].
 ///
-pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
+pub type TetraSphere<T, V: Vec3> = Subdivided<T, V, TetraSphereBase>;
 
 ///
 /// Implements a single triangle as the base shape.
@@ -163,9 +162,9 @@ pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
 #[derive(Default, Copy, Clone, Debug)]
 pub struct TriangleBase;
 
-impl BaseShape for TriangleBase {
+impl<V: Vec3> BaseShape<V> for TriangleBase {
     #[inline]
-    fn initial_points(&self) -> Vec<Vec3A> {
+    fn initial_points(&self) -> Vec<V> {
         consts::triangle::INITIAL_POINTS.to_vec()
     }
 
@@ -176,24 +175,24 @@ impl BaseShape for TriangleBase {
     const EDGES: usize = consts::triangle::EDGES;
 
     #[inline]
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: V, b: V, p: f32) -> V {
         interpolation::lerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: V, b: V) -> V {
         interpolation::lerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V]) {
         interpolation::lerp_multiple(a, b, indices, points);
     }
 }
 
-impl EquilateralBaseShape for TriangleBase {
+impl<V: Vec3> EquilateralBaseShape<V> for TriangleBase {
     #[inline]
-    fn triangle_normals() -> &'static [Vec3A] {
+    fn triangle_normals() -> &'static [V] {
         core::slice::from_ref(&*consts::triangle::TRIANGLE_NORMAL)
     }
 
@@ -208,7 +207,7 @@ impl EquilateralBaseShape for TriangleBase {
 ///
 /// See [`TriangleBase`].
 ///
-pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
+pub type TrianglePlane<T, V> = Subdivided<T, V, TriangleBase>;
 
 ///
 /// Implements a square as the base shape.
@@ -222,9 +221,9 @@ pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 #[derive(Default, Copy, Clone, Debug)]
 pub struct SquareBase;
 
-impl BaseShape for SquareBase {
+impl<V: Vec3> BaseShape<V> for SquareBase {
     #[inline]
-    fn initial_points(&self) -> Vec<Vec3A> {
+    fn initial_points(&self) -> Vec<V> {
         consts::square::INITIAL_POINTS.to_vec()
     }
 
@@ -235,17 +234,17 @@ impl BaseShape for SquareBase {
     const EDGES: usize = consts::square::EDGES;
 
     #[inline]
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: V, b: V, p: f32) -> V {
         interpolation::lerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: V, b: V) -> V {
         interpolation::lerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V]) {
         interpolation::lerp_multiple(a, b, indices, points);
     }
 }
@@ -255,7 +254,7 @@ impl BaseShape for SquareBase {
 ///
 /// See [`SquareBase`].
 ///
-pub type SquarePlane<T> = Subdivided<T, SquareBase>;
+pub type SquarePlane<T, V: Vec3> = Subdivided<T, V, SquareBase>;
 
 ///
 /// Implements a cube as the base shape.
@@ -270,9 +269,9 @@ pub type SquarePlane<T> = Subdivided<T, SquareBase>;
 #[derive(Default, Copy, Clone, Debug)]
 pub struct CubeBase;
 
-impl BaseShape for CubeBase {
+impl<V: Vec3> BaseShape<V> for CubeBase {
     #[inline]
-    fn initial_points(&self) -> Vec<Vec3A> {
+    fn initial_points(&self) -> Vec<V> {
         consts::cube::INITIAL_POINTS.to_vec()
     }
 
@@ -283,17 +282,17 @@ impl BaseShape for CubeBase {
     const EDGES: usize = consts::cube::EDGES;
 
     #[inline]
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+    fn interpolate(&self, a: V, b: V, p: f32) -> V {
         interpolation::geometric_slerp(a, b, p)
     }
 
     #[inline]
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: V, b: V) -> V {
         interpolation::geometric_slerp_half(a, b)
     }
 
     #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V]) {
         interpolation::geometric_slerp_multiple(a, b, indices, points);
     }
 }
@@ -303,7 +302,7 @@ impl BaseShape for CubeBase {
 ///
 /// See [`CubeBase`].
 ///
-pub type CubeSphere<T> = Subdivided<T, CubeBase>;
+pub type CubeSphere<T, V> = Subdivided<T, V, CubeBase>;
 
 ///
 /// Constant values for the shapes provided by this library.

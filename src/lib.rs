@@ -45,8 +45,6 @@
 //! the indices provided by the `Subdivided` struct.
 //!
 
-use glam::Vec3A;
-
 use slice::*;
 use slice::Slice::*;
 
@@ -56,6 +54,22 @@ pub use adjacency::*;
 pub mod interpolation;
 pub mod shapes;
 mod slice;
+
+pub trait Vec3:
+    std::ops::Add<Self, Output = Self> +
+    std::ops::Sub<Self, Output = Self> +
+    std::ops::Mul<f32, Output = Self> +
+    Copy +
+    Clone
+{
+    const ZERO: Self;
+    const ONE_X: Self;
+    const ONE_Y: Self;
+    const ONE_Z: Self;
+
+    fn dot(self, other: Self) -> f32;
+    fn normalize(self) -> Self;
+}
 
 ///
 /// Defines the setup for a base shape, and the functions
@@ -107,7 +121,7 @@ mod slice;
 /// [`triangles`]: #tymethod.triangles
 /// [`EDGES`]: #associatedconstant.EDGES
 ///
-pub trait BaseShape {
+pub trait BaseShape<V: Vec3> {
     ///
     /// The initial vertices for the triangle. Note that
     /// `Vec3A::new` is not a `const fn()`, hence I recommend
@@ -122,7 +136,7 @@ pub trait BaseShape {
     /// - `normalized_lerp` requires normalized (magnitude 1)
     /// data.
     ///
-    fn initial_points(&self) -> Vec<Vec3A>;
+    fn initial_points(&self) -> Vec<V>;
 
     ///
     /// Base triangles for the shape.
@@ -171,14 +185,14 @@ pub trait BaseShape {
     /// [`geometric_slerp`]: ../fn.geometric_slerp.html
     /// [`normalized_lerp`]: ../fn.normalized_lerp.html
     ///
-    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A;
+    fn interpolate(&self, a: V, b: V, p: f32) -> V;
 
     ///
     /// If an optimization is available for the case where `p`
     /// is `0.5`, this function should implement it. This defaults
     /// to calling `interpolate(a, b, 0.5)` however.
     ///
-    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+    fn interpolate_half(&self, a: V, b: V) -> V {
         self.interpolate(a, b, 0.5)
     }
 
@@ -197,7 +211,7 @@ pub trait BaseShape {
     /// - `points`: list of points where the results of the calculation
     /// should end up. To be indexed by values in `indices`.
     ///
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+    fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V]) {
         for (percent, index) in indices.iter().enumerate() {
             let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
 
@@ -212,12 +226,12 @@ pub trait BaseShape {
 ///
 /// This is only used in the cases of spherical shapes.
 ///
-pub trait EquilateralBaseShape: BaseShape {
+pub trait EquilateralBaseShape<V: Vec3>: BaseShape<V> {
     ///
     /// Normals for each of the triangles provided by
     /// [`BaseShape::triangles`].
     ///
-    fn triangle_normals() -> &'static [Vec3A];
+    fn triangle_normals() -> &'static [V];
     ///
     /// Minimum value for the dot product which one could use
     /// to determine that triangle being the closest.
@@ -320,7 +334,7 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool, shape: &impl BaseShape) -> Self {
+    fn one<V: Vec3>(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<V>, calculate: bool, shape: &impl BaseShape<V>) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
@@ -337,14 +351,14 @@ impl TriangleContents {
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three(
+    fn three<V: Vec3>(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
         ca: Slice<u32>,
-        points: &mut Vec<Vec3A>,
+        points: &mut Vec<V>,
         calculate: bool,
-        shape: &impl BaseShape,
+        shape: &impl BaseShape<V>,
     ) {
         use TriangleContents::*;
 
@@ -382,14 +396,14 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six(
+    fn six<V: Vec3>(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
         ca: Slice<u32>,
-        points: &mut Vec<Vec3A>,
+        points: &mut Vec<V>,
         calculate: bool,
-        shape: &impl BaseShape,
+        shape: &impl BaseShape<V>,
     ) {
         use TriangleContents::*;
 
@@ -443,14 +457,14 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(
+    pub fn subdivide<V: Vec3>(
         &mut self,
         ab: Slice<u32>,
         bc: Slice<u32>,
         ca: Slice<u32>,
-        points: &mut Vec<Vec3A>,
+        points: &mut Vec<V>,
         calculate: bool,
-        shape: &impl BaseShape,
+        shape: &impl BaseShape<V>,
     ) {
         use TriangleContents::*;
         assert_eq!(ab.len(), bc.len());
@@ -770,12 +784,12 @@ impl Triangle {
     /// and records the direction in which the values should
     /// be read in the `*_forward` values.
     ///
-    fn subdivide_edges<'a>(
-        &'a mut self,
+    fn subdivide_edges<V: Vec3>(
+        &mut self,
         edges: &mut [Edge],
-        points: &mut Vec<Vec3A>,
+        points: &mut Vec<V>,
         calculate: bool,
-        shape: &impl BaseShape,
+        shape: &impl BaseShape<V>,
     ) -> usize {
         let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
             if !edges[edge_idx].done {
@@ -812,12 +826,12 @@ impl Triangle {
     /// simply added to the buffer and the indices recorded,
     /// but no calculations are performed.
     ///
-    fn subdivide(
+    fn subdivide<V: Vec3>(
         &mut self,
         edges: &mut [Edge],
-        points: &mut Vec<Vec3A>,
+        points: &mut Vec<V>,
         calculate: bool,
-        shape: &impl BaseShape,
+        shape: &impl BaseShape<V>,
     ) {
         let side_length = self.subdivide_edges(edges, points, calculate, shape) + 1;
 
@@ -880,8 +894,8 @@ impl Triangle {
 /// than or equal to `1.0`. This is why all default shapes
 /// lie on the unit sphere.
 ///
-pub struct Subdivided<T, S: BaseShape> {
-    points: Vec<Vec3A>,
+pub struct Subdivided<T, V: Vec3, S: BaseShape<V>> {
+    points: Vec<V>,
     data: Vec<T>,
     triangles: Box<[Triangle]>,
     shared_edges: Box<[Edge]>,
@@ -889,13 +903,13 @@ pub struct Subdivided<T, S: BaseShape> {
     shape: S,
 }
 
-impl<T, S: BaseShape + Default> Subdivided<T, S> {
-    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
+impl<T, V: Vec3, S: BaseShape<V> + Default> Subdivided<T, V, S> {
+    pub fn new(subdivisions: usize, generator: impl FnMut(V) -> T) -> Self {
         Self::new_custom_shape(subdivisions, generator, Default::default())
     }
 }
 
-impl<T, S: BaseShape> Subdivided<T, S> {
+impl<T, V: Vec3, S: BaseShape<V>> Subdivided<T, V, S> {
     ///
     /// Creates the base shape from `S` and subdivides it.
     ///
@@ -906,7 +920,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// - `generator` is a function run once all the subdivisions are
     /// applied and its values are stored in an internal `Vec`.
     ///
-    pub fn new_custom_shape(subdivisions: usize, generator: impl FnMut(Vec3A) -> T, shape: S) -> Self {
+    pub fn new_custom_shape(subdivisions: usize, generator: impl FnMut(V) -> T, shape: S) -> Self {
         let mut this = Self {
             points: shape.initial_points(),
             shared_edges: {
@@ -955,7 +969,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     /// The raw points created by the subdivision process.
     ///
-    pub fn raw_points(&self) -> &[Vec3A] {
+    pub fn raw_points(&self) -> &[V] {
         &self.points
     }
 
@@ -1077,14 +1091,14 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 }
 
-impl<T, S: BaseShape + EquilateralBaseShape> Subdivided<T, S> {
+impl<T, V: Vec3, S: BaseShape<V> + EquilateralBaseShape<V>> Subdivided<T, V, S> {
     ///
     /// Closest "main" triangle.
     ///
     /// Undefined results if the point is one of the vertices
     /// on the original base shape.
     ///
-    pub fn main_triangle_intersect(point: Vec3A) -> usize {
+    pub fn main_triangle_intersect(point: V) -> usize {
         let point = point.normalize();
         let mut nearest = 0;
         let mut near_factor = point.dot(S::triangle_normals()[0]);
@@ -1283,6 +1297,17 @@ mod tests {
     use crate::shapes::IcoSphere;
     use crate::Slice::Forward;
     use glam::Vec3A;
+
+    impl crate::Vec3 for glam::Vec3A {
+        const ZERO: Self = Vec3A::ZERO;
+        const ONE_X: Self = Vec3A::X;
+        const ONE_Y: Self = Vec3A::Y;
+        const ONE_Z: Self = Vec3A::Z;
+
+        fn dot(self, other: Self) -> f32 {
+            self.dot(other)
+        }
+    }
 
     // Starting points aren't _quite_ precise enough to use `f32::EPSILON`.
     const EPSILON: f32 = 0.0000002;
