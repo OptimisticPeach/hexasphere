@@ -329,7 +329,7 @@ impl TriangleContents {
         if calculate {
             points.push(shape.interpolate_half(p1, p2));
         } else {
-            points.push(Vec3A::zero());
+            points.push(Vec3A::ZERO);
         }
         TriangleContents::One(index)
     }
@@ -366,7 +366,7 @@ impl TriangleContents {
                     points.extend_from_slice(&[b, c]);
                     points[x as usize] = a;
                 } else {
-                    points.extend_from_slice(&[Vec3A::zero(), Vec3A::zero()])
+                    points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO])
                 }
 
                 *self = Three {
@@ -424,7 +424,7 @@ impl TriangleContents {
                     points[c_index as usize] = c;
                     points.extend_from_slice(&[ab, bc, ca]);
                 } else {
-                    points.extend_from_slice(&[Vec3A::zero(), Vec3A::zero(), Vec3A::zero()])
+                    points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO])
                 }
 
                 *self = Six {
@@ -486,7 +486,7 @@ impl TriangleContents {
                 ref mut contents,
                 ref mut my_side_length,
             } => {
-                points.extend_from_slice(&[Vec3A::zero(), Vec3A::zero(), Vec3A::zero()]);
+                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
                 let len = points.len() as u32;
                 sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
                 *my_side_length += 1;
@@ -780,7 +780,7 @@ impl Triangle {
         let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
             if !edges[edge_idx].done {
                 edges[edge_idx].points.push(points.len() as u32);
-                points.push(Vec3A::zero());
+                points.push(Vec3A::ZERO);
 
                 if calculate {
                     shape.interpolate_multiple(
@@ -1319,7 +1319,7 @@ mod tests {
 
         let expected = Vec3A::new(0.0, 0.0767208624118, 0.997052611085);
 
-        let mut result = Vec3A::zero();
+        let mut result = Vec3A::ZERO;
         geometric_slerp_multiple(p1, p2, &[0], std::slice::from_mut(&mut result));
 
         assert!((expected - result).length() <= EPSILON);
@@ -1334,7 +1334,7 @@ mod tests {
             Vec3A::new(0.0925155945469, 0.0, -0.995711235633),
         ];
 
-        let mut result = [Vec3A::zero(), Vec3A::zero(), Vec3A::zero(), Vec3A::zero()];
+        let mut result = [Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO];
 
         geometric_slerp_multiple(p1, p2, &[0, 1, 2, 3], &mut result);
 
