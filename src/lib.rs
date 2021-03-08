@@ -646,6 +646,10 @@ impl<T, V: Vec3, S: BaseShape<V>> Subdivided<T, V, S> {
         }
     }
 
+    fn raw_user_data(&self) -> &T {
+        &self.data
+    }
+
     pub fn raw_points(&self) -> &[V] {
         &self.points
     }
