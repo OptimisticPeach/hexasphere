@@ -1,55 +1,13 @@
 //!
 //! Library for subdividing shapes made of triangles.
 //!
-//! This library defines `Subdivided<T, S>`. This struct
-//! allows one to define a base shape using `S` and the
-//! `BaseShape` trait, and to subdivide it using the
-//! interpolation functions defined as part of `S`.
-//!
-//! This includes a few base shapes:
-//!
-//! - Icosahedron
-//! - Tetrahedron
-//! - Square
-//! - Triangle
-//! - Cube
-//!
-//! ## Example usage
-//!
-//! ```rust
-//! use hexasphere::shapes::IcoSphere;
-//!
-//! fn main() {
-//!     // Create a new sphere with 20 subdivisions
-//!     // an no data associated with the vertices.
-//!     let sphere = IcoSphere::new(20, |_| ());
-//!
-//!     let points = sphere.raw_points();
-//!     for p in points {
-//!         println!("{:?} is a point on the sphere!", p);
-//!     }
-//!     let indices = sphere.get_all_indices();
-//!     for triangle in indices.chunks(3) {
-//!         println!(
-//!             "[{}, {}, {}] is a triangle on the resulting shape",
-//!             triangle[0],
-//!             triangle[1],
-//!             triangle[2],
-//!         );
-//!     }
-//! }
-//! ```
-//!
-//! # Features
-//! - `adjacency` allows the user to create neighbour maps from
-//! the indices provided by the `Subdivided` struct.
+//! This is for internal bevy use only, and is not
+//! well documented. See [`hexasphere`](crates.io/crates/hexasphere)
+//! for more information.
 //!
 
 use slice::*;
 use slice::Slice::*;
-
-#[cfg(feature = "adjacency")]
-pub use adjacency::*;
 
 pub mod interpolation;
 pub mod shapes;
@@ -57,160 +15,30 @@ mod slice;
 
 pub trait Vec3:
     std::ops::Add<Self, Output = Self> +
-    std::ops::Sub<Self, Output = Self> +
     std::ops::Mul<f32, Output = Self> +
-    Copy +
-    Clone
+    Copy
 {
     const ZERO: Self;
-    const ONE_X: Self;
-    const ONE_Y: Self;
-    const ONE_Z: Self;
 
     fn dot(self, other: Self) -> f32;
     fn normalize(self) -> Self;
+    fn from_arr3(data: [f32; 3]) -> Self;
 }
 
-///
-/// Defines the setup for a base shape, and the functions
-/// used in interpolation.
-///
-/// If you want to use a different interpolation function,
-/// implement this trait for a new type, and carry over only
-/// the properties you'd like to keep:
-///
-/// ```rust
-/// # use hexasphere::BaseShape;
-/// use hexasphere::{Triangle, shapes::IcoSphereBase};
-/// use glam::Vec3A;
-/// // Uses linear interpolation instead of spherical.
-/// struct FlatIcosahedron;
-///
-/// impl BaseShape for FlatIcosahedron {
-///     // Keep the initial parameters.
-///     fn initial_points(&self) -> Vec<Vec3A> {
-///         IcoSphereBase.initial_points()
-///     }
-///
-///     fn triangles(&self) -> Box<[Triangle]> {
-///         IcoSphereBase.triangles()
-///     }
-///     const EDGES: usize = IcoSphereBase::EDGES;
-///
-///     // Swap out what you'd like to change.
-///     fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
-///         hexasphere::interpolation::lerp(a, b, p)
-///     }
-///
-///     fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
-///         hexasphere::interpolation::lerp_half(a, b)
-///     }
-///
-///     fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
-///         hexasphere::interpolation::lerp_multiple(a, b, indices, points);
-///     }
-/// }
-/// ```
-///
-/// Or, create your own shape, by changing the values for
-/// [`initial_points`], [`triangles`], and [`EDGES`]. Check
-/// the documentation for these members individually on how
-/// they should be implemented.
-///
-/// [`initial_points`]: #tymethod.initial_points
-/// [`triangles`]: #tymethod.triangles
-/// [`EDGES`]: #associatedconstant.EDGES
-///
 pub trait BaseShape<V: Vec3> {
-    ///
-    /// The initial vertices for the triangle. Note that
-    /// `Vec3A::new` is not a `const fn()`, hence I recommend
-    /// you use `lazy_static`. Check the source file for this
-    /// crate and look for the constants module at the bottom
-    /// for an example.
-    ///
-    /// Constraints on the points depend on the interpolation
-    /// function used:
-    /// - `slerp` requires normalized (magnitude 1) data.
-    /// - `lerp` doesn't care.
-    /// - `normalized_lerp` requires normalized (magnitude 1)
-    /// data.
-    ///
     fn initial_points(&self) -> Vec<V>;
 
-    ///
-    /// Base triangles for the shape.
-    ///
-    /// - The fields `a`, `b`, and `c` define the indices for
-    /// the points of the triangles given the data present
-    /// in `initial_points`. Note that this crate assumes
-    /// points are in a counter clockwise ordering.
-    /// - The fields `ab_edge`, `bc_edge`, `ca_edge` mark the
-    /// index of the edge which `a`/`b`, `b`/`c`, and `c`/`a`
-    /// border respectively. While theoretically you could give
-    /// each triangle its own edge, minimizing edges saves on
-    /// memory footprint and performance.
-    /// - Triangles should be created through [`Triangle::new`].
-    ///
     fn triangles(&self) -> Box<[Triangle]>;
 
-    ///
-    /// Number of unique edges defined in the contents of
-    /// `triangles()`. This number is 5 for a square for
-    /// example:
-    /// ```text
-    /// a - 0 - b
-    /// |     / |
-    /// 3   4   1
-    /// | /     |
-    /// d - 2 - c
-    /// ```
-    ///
     const EDGES: usize;
 
-    ///
-    /// Basic function used for interpolation. When `p` is
-    /// `0.0`, `a` is expected. When `p` is `1.0`, `b` is
-    /// expected. There are three options already implemented
-    /// in this crate:
-    /// - [`lerp`] implements linear interpolation.
-    /// - [`geometric_slerp`] implements spherical
-    /// interpolation. (Interpolates along an arc on a sphere)
-    /// - [`normalized_lerp`] implements cheaper
-    /// yet less accurate spherical interpolation. The accuracy
-    /// decreases as the angle between the two points on the unit
-    /// sphere increases.
-    ///
-    /// [`lerp`]: ../fn.lerp.html
-    /// [`geometric_slerp`]: ../fn.geometric_slerp.html
-    /// [`normalized_lerp`]: ../fn.normalized_lerp.html
-    ///
     fn interpolate(&self, a: V, b: V, p: f32) -> V;
 
-    ///
-    /// If an optimization is available for the case where `p`
-    /// is `0.5`, this function should implement it. This defaults
-    /// to calling `interpolate(a, b, 0.5)` however.
-    ///
+
     fn interpolate_half(&self, a: V, b: V) -> V {
         self.interpolate(a, b, 0.5)
     }
 
-    ///
-    /// If an optimization is available for the case where `p`
-    /// varies but `a` and `b` don't this function should implement
-    /// it.
-    ///
-    /// ### Parameters
-    /// - `a`: start.
-    /// - `b`: end.
-    /// - `indices`: list of indices to index into `points`. `points`
-    /// at the index should contain the result. The index (n) of an
-    /// index should correspond with the nth point in a distribution
-    /// of `indices.len()` points between (exclusive) `a` and `b`.
-    /// - `points`: list of points where the results of the calculation
-    /// should end up. To be indexed by values in `indices`.
-    ///
     fn interpolate_multiple(&self, a: V, b: V, indices: &[u32], points: &mut [V]) {
         for (percent, index) in indices.iter().enumerate() {
             let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
@@ -220,44 +48,8 @@ pub trait BaseShape<V: Vec3> {
     }
 }
 
-///
-/// Implemented in the case where the triangles on the shape
-/// are both equilateral and identifiable from their normal.
-///
-/// This is only used in the cases of spherical shapes.
-///
-pub trait EquilateralBaseShape<V: Vec3>: BaseShape<V> {
-    ///
-    /// Normals for each of the triangles provided by
-    /// [`BaseShape::triangles`].
-    ///
-    fn triangle_normals() -> &'static [V];
-    ///
-    /// Minimum value for the dot product which one could use
-    /// to determine that triangle being the closest.
-    ///
-    /// If the dot product between a vector and a triangle
-    /// normal is greater than this, then that vector is
-    /// guaranteed to be within that triangle.
-    ///
-    /// This is also the cosine of the angle of the cone
-    /// whose circular edge lies on a triangle.
-    ///
-    fn triangle_min_dot() -> f32;
-}
-
-///
-/// The edge between two main triangles.
-///
 struct Edge {
-    ///
-    /// Indices of the points between the endpoints.
-    ///
     points: Vec<u32>,
-    ///
-    /// Whether this edge has already been processed
-    /// or not.
-    ///
     done: bool,
 }
 
@@ -270,30 +62,11 @@ impl Default for Edge {
     }
 }
 
-///
-/// Contents of one of the main triangular faces.
-///
-/// This is *not* the entire face, it is the points which do
-/// not include the exterior edges and vertices since those are
-/// shared.
-///
 #[derive(Clone, Debug)]
 enum TriangleContents {
-    ///
-    /// Nothing inside the triangle: subdivisions 0 and 1
-    ///
     None,
-    ///
-    /// One point inside the triangle: subdivision 2
-    ///
     One(u32),
-    ///
-    /// Three points inside the triangle: subdivision 3
-    ///
     Three { a: u32, b: u32, c: u32 },
-    ///
-    /// Six points inside the triangle: subdivision 4
-    ///
     Six {
         a: u32,
         b: u32,
@@ -302,9 +75,6 @@ enum TriangleContents {
         bc: u32,
         ca: u32,
     },
-    ///
-    /// More than six points inside the triangle: subdivision > 4
-    ///
     More {
         a: u32,
         b: u32,
@@ -313,9 +83,6 @@ enum TriangleContents {
         // to save on extra allocations.
         sides: Vec<u32>,
         my_side_length: u32,
-        ///
-        /// Contents of the inner triangle.
-        ///
         // Implementing this as a `Vec<TriangleContents>` would
         // probably be a perf. improvement someday, however not
         // something worth implementing right now.
@@ -324,16 +91,10 @@ enum TriangleContents {
 }
 
 impl TriangleContents {
-    ///
-    /// Creates a `None` variant.
-    ///
     pub fn none() -> Self {
         Self::None
     }
 
-    ///
-    /// Creates a `One` by interpolating two values.
-    ///
     fn one<V: Vec3>(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<V>, calculate: bool, shape: &impl BaseShape<V>) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
@@ -343,14 +104,11 @@ impl TriangleContents {
         if calculate {
             points.push(shape.interpolate_half(p1, p2));
         } else {
-            points.push(Vec3A::ZERO);
+            points.push(V::ZERO);
         }
         TriangleContents::One(index)
     }
 
-    ///
-    /// Creates a `Three` variant from a `One` variant.
-    ///
     fn three<V: Vec3>(
         &mut self,
         ab: Slice<u32>,
@@ -380,7 +138,7 @@ impl TriangleContents {
                     points.extend_from_slice(&[b, c]);
                     points[x as usize] = a;
                 } else {
-                    points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO])
+                    points.extend_from_slice(&[V::ZERO, V::ZERO])
                 }
 
                 *self = Three {
@@ -393,9 +151,6 @@ impl TriangleContents {
         }
     }
 
-    ///
-    /// Creates a `Six` variant from a `Three` variant.
-    ///
     fn six<V: Vec3>(
         &mut self,
         ab: Slice<u32>,
@@ -438,7 +193,7 @@ impl TriangleContents {
                     points[c_index as usize] = c;
                     points.extend_from_slice(&[ab, bc, ca]);
                 } else {
-                    points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO])
+                    points.extend_from_slice(&[V::ZERO, V::ZERO, V::ZERO])
                 }
 
                 *self = Six {
@@ -454,9 +209,6 @@ impl TriangleContents {
         }
     }
 
-    ///
-    /// Subdivides this given the surrounding points.
-    ///
     pub fn subdivide<V: Vec3>(
         &mut self,
         ab: Slice<u32>,
@@ -500,7 +252,7 @@ impl TriangleContents {
                 ref mut contents,
                 ref mut my_side_length,
             } => {
-                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
+                points.extend_from_slice(&[V::ZERO, V::ZERO, V::ZERO]);
                 let len = points.len() as u32;
                 sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
                 *my_side_length += 1;
@@ -551,11 +303,6 @@ impl TriangleContents {
         }
     }
 
-    ///
-    /// Indexes the AB edge.
-    ///
-    /// This is inclusive of A and B.
-    ///
     pub fn idx_ab(&self, idx: usize) -> u32 {
         use TriangleContents::*;
         match self {
@@ -588,11 +335,6 @@ impl TriangleContents {
         }
     }
 
-    ///
-    /// Indexes the BC edge.
-    ///
-    /// This is inclusive of B and C.
-    ///
     pub fn idx_bc(&self, idx: usize) -> u32 {
         use TriangleContents::*;
         match self {
@@ -627,11 +369,6 @@ impl TriangleContents {
         }
     }
 
-    ///
-    /// Indexes the CA edge.
-    ///
-    /// This is inclusive of C and A.
-    ///
     pub fn idx_ca(&self, idx: usize) -> u32 {
         use TriangleContents::*;
         match self {
@@ -666,10 +403,6 @@ impl TriangleContents {
         }
     }
 
-    ///
-    /// Adds the indices in this portion of the triangle
-    /// to the specified buffer in order.
-    ///
     pub fn add_indices(&self, buffer: &mut Vec<u32>) {
         use TriangleContents::*;
         match self {
@@ -720,12 +453,6 @@ impl TriangleContents {
 }
 
 #[derive(Clone, Debug)]
-///
-/// A main triangle on the base shape of a subdivided shape.
-///
-/// The specification of the library expects `a`, `b`, and `c`
-/// to be in a counter-clockwise winding.
-///
 pub struct Triangle {
     pub a: u32,
     pub b: u32,
@@ -758,10 +485,6 @@ impl Default for Triangle {
 }
 
 impl Triangle {
-    ///
-    /// Creates a new `Triangle` given the data. This is done
-    /// to avoid boilerplate.
-    ///
     pub const fn new(a: u32, b: u32, c: u32, ab_edge: usize, bc_edge: usize, ca_edge: usize) -> Self {
         Self {
             a,
@@ -779,11 +502,6 @@ impl Triangle {
         }
     }
 
-    ///
-    /// Subdivides the edges of this triangle if necessary,
-    /// and records the direction in which the values should
-    /// be read in the `*_forward` values.
-    ///
     fn subdivide_edges<V: Vec3>(
         &mut self,
         edges: &mut [Edge],
@@ -794,7 +512,7 @@ impl Triangle {
         let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
             if !edges[edge_idx].done {
                 edges[edge_idx].points.push(points.len() as u32);
-                points.push(Vec3A::ZERO);
+                points.push(V::ZERO);
 
                 if calculate {
                     shape.interpolate_multiple(
@@ -819,13 +537,6 @@ impl Triangle {
         edges[self.ab_edge].points.len()
     }
 
-    ///
-    /// Subdivides the edges and contents of this triangle.
-    ///
-    /// If `calculate` is set to `false`, then the points are
-    /// simply added to the buffer and the indices recorded,
-    /// but no calculations are performed.
-    ///
     fn subdivide<V: Vec3>(
         &mut self,
         edges: &mut [Edge],
@@ -855,10 +566,6 @@ impl Triangle {
         }
     }
 
-    ///
-    /// Appends the indices of all the subtriangles onto the
-    /// specified buffer.
-    ///
     fn add_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge]) {
         let ab = if self.ab_forward {
             Forward(&edges[self.ab_edge].points)
@@ -882,18 +589,6 @@ impl Triangle {
     }
 }
 
-///
-/// A progressively subdivided shape which can record
-/// the indices of the points and list out the individual
-/// triangles of the resulting shape.
-///
-/// All base triangles specified by `S` in [`BaseShape`]
-/// are expected to be in counter clockwise winding.
-///
-/// Points are preferably stored with coordinates less
-/// than or equal to `1.0`. This is why all default shapes
-/// lie on the unit sphere.
-///
 pub struct Subdivided<T, V: Vec3, S: BaseShape<V>> {
     points: Vec<V>,
     data: Vec<T>,
@@ -905,21 +600,11 @@ pub struct Subdivided<T, V: Vec3, S: BaseShape<V>> {
 
 impl<T, V: Vec3, S: BaseShape<V> + Default> Subdivided<T, V, S> {
     pub fn new(subdivisions: usize, generator: impl FnMut(V) -> T) -> Self {
-        Self::new_custom_shape(subdivisions, generator, Default::default())
+        Self::new_custom_shape(subdivisions, generator, S::default())
     }
 }
 
 impl<T, V: Vec3, S: BaseShape<V>> Subdivided<T, V, S> {
-    ///
-    /// Creates the base shape from `S` and subdivides it.
-    ///
-    /// - `subdivisions` specifies the number of times a subdivision
-    /// will be created. In other terms, this is the number of auxiliary
-    /// points between the vertices on the original shape.
-    ///
-    /// - `generator` is a function run once all the subdivisions are
-    /// applied and its values are stored in an internal `Vec`.
-    ///
     pub fn new_custom_shape(subdivisions: usize, generator: impl FnMut(V) -> T, shape: S) -> Self {
         let mut this = Self {
             points: shape.initial_points(),
@@ -951,11 +636,6 @@ impl<T, V: Vec3, S: BaseShape<V>> Subdivided<T, V, S> {
         this
     }
 
-    ///
-    /// Subdivides all triangles. `calculate` signals whether or not
-    /// to recalculate vertices (To not calculate vertices between many
-    /// subdivisions).
-    ///
     fn subdivide(&mut self, calculate: bool) {
         for Edge { done, .. } in &mut *self.shared_edges {
             *done = false;
@@ -966,32 +646,14 @@ impl<T, V: Vec3, S: BaseShape<V>> Subdivided<T, V, S> {
         }
     }
 
-    ///
-    /// The raw points created by the subdivision process.
-    ///
     pub fn raw_points(&self) -> &[V] {
         &self.points
     }
 
-    ///
-    /// Appends the indices for the triangle into `buffer`.
-    ///
-    /// The specified triangle is a main triangle on the base
-    /// shape. The range of this should be limited to the number
-    /// of triangles in the base shape.
-    ///
-    /// Alternatively, use [`get_all_indices`] to get all the
-    /// indices.
-    ///
-    /// [`get_all_indices`]: #method.get_all_indices
-    ///
     pub fn get_indices(&self, triangle: usize, buffer: &mut Vec<u32>) {
         self.triangles[triangle].add_indices(buffer, &self.shared_edges);
     }
 
-    ///
-    /// Gets the indices for all main triangles in the shape.
-    ///
     pub fn get_all_indices(&self) -> Vec<u32> {
         let mut buffer = Vec::new();
 
@@ -1002,141 +664,11 @@ impl<T, V: Vec3, S: BaseShape<V>> Subdivided<T, V, S> {
         buffer
     }
 
-    ///
-    /// Returns the number of subdivisions applied when this shape
-    /// was created.
-    ///
     pub fn subdivisions(&self) -> usize {
         self.subdivisions
     }
-
-    ///
-    /// Returns the custom data created by the generator function.
-    ///
-    pub fn raw_data(&self) -> &[T] {
-        &self.data
-    }
-
-    ///
-    /// Calculate the number of indices which each main
-    /// triangle will add to the vertex buffer.
-    ///
-    /// # Equation
-    ///
-    /// ```text
-    /// (subdivisions + 1)²
-    /// ```
-    ///
-    pub fn indices_per_main_triangle(&self) -> usize {
-        (self.subdivisions + 1) * (self.subdivisions + 1)
-    }
-
-    ///
-    /// Calculate the number of vertices contained within
-    /// each main triangle including the vertices which are
-    /// shared with another main triangle.
-    ///
-    /// # Equation
-    ///
-    /// ```text
-    /// (subdivisions + 1) * (subdivisions + 2) / 2
-    /// ```
-    ///
-    pub fn vertices_per_main_triangle_shared(&self) -> usize {
-        (self.subdivisions + 1) * (self.subdivisions + 2) / 2
-    }
-
-    ///
-    /// Calculate the number of vertices contained within each
-    /// main triangle excluding the ones that are shared with
-    /// other main triangles.
-    ///
-    /// # Equation
-    ///
-    /// ```text
-    /// {
-    /// { subdivisions < 2  : 0
-    /// {
-    /// { subdivisions >= 2 : (subdivisions - 1) * subdivisions / 2
-    /// {
-    /// ```
-    ///
-    pub fn vertices_per_main_triangle_unique(&self) -> usize {
-        if self.subdivisions < 2 {
-            return 0;
-        }
-        (self.subdivisions - 1) * self.subdivisions / 2
-    }
-
-    ///
-    /// Calculate the number of vertices along the edges
-    /// of the main triangles and the vertices of the main
-    /// triangles.
-    ///
-    /// # Equation
-    ///
-    /// ```text
-    /// subdivisions * EDGES + INITIAL_POINTS
-    /// ```
-    ///
-    pub fn shared_vertices(&self) -> usize {
-        self.subdivisions * S::EDGES + self.shape.initial_points().len()
-    }
-
-    ///
-    /// Linear distance between two points on this shape.
-    ///
-    pub fn linear_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
-        (self.points[p1 as usize] - self.points[p2 as usize]).length() * radius
-    }
 }
 
-impl<T, V: Vec3, S: BaseShape<V> + EquilateralBaseShape<V>> Subdivided<T, V, S> {
-    ///
-    /// Closest "main" triangle.
-    ///
-    /// Undefined results if the point is one of the vertices
-    /// on the original base shape.
-    ///
-    pub fn main_triangle_intersect(point: V) -> usize {
-        let point = point.normalize();
-        let mut nearest = 0;
-        let mut near_factor = point.dot(S::triangle_normals()[0]);
-
-        if near_factor > S::triangle_min_dot() {
-            return 0;
-        }
-
-        for (index, normal) in S::triangle_normals().iter().enumerate().skip(1) {
-            let factor = normal.dot(point);
-            if factor > near_factor {
-                if factor > S::triangle_min_dot() {
-                    return index;
-                }
-                nearest = index;
-                near_factor = factor;
-            }
-        }
-
-        nearest
-    }
-
-    ///
-    /// Distance between two points on this sphere (assuming this
-    /// is a sphere).
-    ///
-    pub fn spherical_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
-        self.points[p1 as usize]
-            .dot(self.points[p2 as usize])
-            .acos()
-            * radius
-    }
-}
-
-///
-/// Adds the indices of the triangles in this "layer" of the triangle to
-/// the buffer.
-///
 // The logic in this function has been worked out mostly on pen and paper
 // and therefore it is difficult to read.
 fn add_indices_triangular(
@@ -1217,81 +749,6 @@ fn add_indices_triangular(
     ]);
 }
 
-#[cfg(feature = "adjacency")]
-///
-/// Implements neighbour tracking.
-///
-mod adjacency {
-    use smallvec::SmallVec;
-    use std::collections::HashMap;
-
-    #[derive(Default, Clone, Debug)]
-    ///
-    /// Stores the neighbours of a subdivided shape.
-    ///
-    pub struct AdjacentStore {
-        pub(crate) subdivisions: usize,
-        pub(crate) map: HashMap<u32, SmallVec<[u32; 6]>>,
-    }
-
-    impl AdjacentStore {
-        ///
-        /// Creates an empty neighbour storage.
-        ///
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        ///
-        /// Optionally returns the neighbours for a vertex.
-        ///
-        /// In the case of an IcoSphere, this is of length `5` or `6`.
-        ///
-        pub fn neighbours(&self, id: u32) -> Option<&[u32]> {
-            self.map.get(&id).map(|x| &**x)
-        }
-
-        ///
-        /// Creates the map given the indices of a shape.
-        ///
-        pub fn from_indices(indices: &[u32]) -> Self {
-            let mut this = Self::new();
-            this.add_triangle_indices(indices);
-            this
-        }
-
-        ///
-        /// Adds the indices to the map.
-        ///
-        pub fn add_triangle_indices(&mut self, triangles: &[u32]) {
-            assert_eq!(triangles.len() % 3, 0);
-
-            for triangle in triangles.chunks(3) {
-                self.add_triangle([triangle[0], triangle[1], triangle[2]]);
-            }
-        }
-
-        ///
-        /// Adds a single subdivided triangle to the storage.
-        ///
-        fn add_triangle(&mut self, [a, b, c]: [u32; 3]) {
-            let mut add_triangle = |a, b, c| {
-                let vec = self.map.entry(a).or_insert_with(SmallVec::new);
-                if !vec.contains(&b) {
-                    vec.push(b);
-                }
-                if !vec.contains(&c) {
-                    vec.push(c);
-                }
-            };
-
-            add_triangle(a, b, c);
-            add_triangle(b, c, a);
-            add_triangle(c, a, b);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::shapes::IcoSphere;
@@ -1300,12 +757,17 @@ mod tests {
 
     impl crate::Vec3 for glam::Vec3A {
         const ZERO: Self = Vec3A::ZERO;
-        const ONE_X: Self = Vec3A::X;
-        const ONE_Y: Self = Vec3A::Y;
-        const ONE_Z: Self = Vec3A::Z;
 
         fn dot(self, other: Self) -> f32 {
             self.dot(other)
+        }
+
+        fn normalize(self) -> Self {
+            self.normalize()
+        }
+
+        fn from_arr3([x, y, z]: [f32; 3]) -> Self {
+            Self::new(x, y, z)
         }
     }
 
@@ -1370,25 +832,25 @@ mod tests {
 
     #[test]
     fn new() {
-        let x = IcoSphere::new(0, |_| ());
+        let x = IcoSphere::new(0, |_: Vec3A| ());
         x.get_indices(0, &mut Vec::new());
     }
 
     #[test]
     fn one() {
-        let x = IcoSphere::new(1, |_| ());
+        let x = IcoSphere::new(1, |_: Vec3A| ());
         x.get_indices(0, &mut Vec::new());
     }
 
     #[test]
     fn second_layer_inner() {
-        let x = IcoSphere::new(2, |_| ());
+        let x = IcoSphere::new(2, |_: Vec3A| ());
         x.get_indices(0, &mut Vec::new());
-        let x = IcoSphere::new(3, |_| ());
+        let x = IcoSphere::new(3, |_: Vec3A| ());
         x.get_indices(0, &mut Vec::new());
-        let x = IcoSphere::new(5, |_| ());
+        let x = IcoSphere::new(5, |_: Vec3A| ());
         x.get_indices(0, &mut Vec::new());
-        let x = IcoSphere::new(6, |_| ());
+        let x = IcoSphere::new(6, |_: Vec3A| ());
         x.get_indices(0, &mut Vec::new());
     }
 
@@ -1492,68 +954,10 @@ mod tests {
 
     #[test]
     fn precision() {
-        let sphere = IcoSphere::new(10, |_| ());
+        let sphere = IcoSphere::new(10, |_: Vec3A| ());
 
         for i in sphere.raw_points() {
             assert!(i.length() - 1.0 <= EPSILON);
-        }
-    }
-
-    #[cfg(feature = "adjacency")]
-    mod adjacency {
-        use crate::{AdjacentStore, shapes::IcoSphere};
-
-        #[test]
-        fn creation() {
-            let sphere = IcoSphere::new(0, |_| ());
-
-            let mut indices = Vec::new();
-
-            for i in 0..20 {
-                sphere.get_indices(i, &mut indices);
-            }
-
-            let _ = AdjacentStore::from_indices(&indices);
-        }
-
-        #[test]
-        fn correct_indices() {
-            let sphere = IcoSphere::new(0, |_| ());
-
-            let mut indices = Vec::new();
-
-            for i in 0..20 {
-                sphere.get_indices(i, &mut indices);
-            }
-
-            let store = AdjacentStore::from_indices(&indices);
-
-            const REFERENCE_DATA: [[u32; 5]; 12] = [
-                [1, 2, 3, 4, 5],
-                [0, 2, 7, 6, 5],
-                [0, 1, 3, 8, 7],
-                [0, 4, 2, 9, 8],
-                [0, 5, 10, 9, 3],
-                [0, 1, 6, 10, 4],
-                [5, 1, 7, 11, 10],
-                [1, 2, 8, 11, 6],
-                [2, 3, 9, 11, 7],
-                [3, 4, 10, 11, 8],
-                [4, 5, 6, 11, 9],
-                [6, 7, 8, 9, 10],
-            ];
-
-            for i in 0..12 {
-                let expected = REFERENCE_DATA[i as usize];
-                let actual = store.neighbours(i).unwrap();
-                assert_eq!(actual.len(), 5);
-                let mut values = [0; 5];
-                for (x, i) in actual.iter().enumerate() {
-                    assert!(expected.contains(i));
-                    values[x] += 1;
-                }
-                assert_eq!(values, [1; 5]);
-            }
         }
     }
 }
