@@ -38,3 +38,10 @@ A few more optimizations are coming, along with more options for generation:
 - Remove nested triangle layers by placing them into their own `Vec`.
 - Allow interpolation functions to have access to state. (This would
 permit certain things such as sampling noise as part of the generation).
+  
+# License
+Hexasphere is distributed under the terms of either the MIT license, or the Apache License (Version 2.0)
+at the user's choice.
+
+See the files named LICENSE-MIT and LICENSE-APACHE2 relative to the root directory of this 
+project for more details.
