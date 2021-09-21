@@ -482,17 +482,20 @@ mod consts {
         use glam::Vec3A;
 
         lazy_static::lazy_static! {
-            pub(crate) static ref INITIAL_POINTS: [Vec3A; 8] = [
-                Vec3A::new(-1.0, -1.0, -1.0),
-                Vec3A::new( 1.0, -1.0, -1.0),
-                Vec3A::new(-1.0,  1.0, -1.0),
-                Vec3A::new( 1.0,  1.0, -1.0),
+            pub(crate) static ref INITIAL_POINTS: [Vec3A; 8] = {
+                let val = (3.0f32).sqrt().recip();
+                [
+                    Vec3A::new(-val, -val, -val),
+                    Vec3A::new( val, -val, -val),
+                    Vec3A::new(-val,  val, -val),
+                    Vec3A::new( val,  val, -val),
 
-                Vec3A::new(-1.0, -1.0,  1.0),
-                Vec3A::new( 1.0, -1.0,  1.0),
-                Vec3A::new(-1.0,  1.0,  1.0),
-                Vec3A::new( 1.0,  1.0,  1.0),
-            ];
+                    Vec3A::new(-val, -val,  val),
+                    Vec3A::new( val, -val,  val),
+                    Vec3A::new(-val,  val,  val),
+                    Vec3A::new( val,  val,  val),
+                ]
+            };
         }
 
         pub const TRIANGLES: [Triangle; 12] = [
