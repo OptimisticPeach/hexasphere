@@ -709,7 +709,7 @@ impl TriangleContents {
     /// in this portion of the triangle to the specified
     /// buffer in order.
     ///
-    pub fn add_line_indices(&self, buffer: &mut Vec<u32>, delta: u32) {
+    pub fn add_line_indices(&self, buffer: &mut Vec<u32>, delta: u32, mut breaks: impl FnMut(&mut Vec<u32>)) {
         use TriangleContents::*;
         match self {
             None | One(_) | Three { .. } => {}
@@ -718,7 +718,10 @@ impl TriangleContents {
                 bc,
                 ca,
                 ..
-            } => buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]),
+            } => {
+                buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]);
+                breaks(buffer);
+            },
             &More {
                 ref sides,
                 my_side_length,
@@ -739,7 +742,8 @@ impl TriangleContents {
                     &**contents,
                     buffer,
                 );
-                contents.add_line_indices(buffer, delta);
+                breaks(buffer);
+                contents.add_line_indices(buffer, delta, breaks);
             }
         }
     }
@@ -911,7 +915,7 @@ impl Triangle {
     /// Appends the indices of all the subtriangles' wireframes
     /// onto the specified buffer.
     ///
-    fn add_line_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge], delta: u32) {
+    fn add_line_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge], delta: u32, mut breaks: impl FnMut(&mut Vec<u32>)) {
         let ab = if self.ab_forward {
             Forward(&edges[self.ab_edge].points)
         } else {
@@ -930,7 +934,9 @@ impl Triangle {
 
         add_line_indices_triangular(delta, ab, bc, ca, &self.contents, buffer);
 
-        self.contents.add_line_indices(buffer, delta);
+        breaks(buffer);
+
+        self.contents.add_line_indices(buffer, delta, breaks);
     }
 }
 
@@ -1061,10 +1067,12 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// is generally intended to be used to have a NaN vertex at zero. Set
     /// to zero to produce the indices as if there was no NaN vertex.
     ///
-    /// This does not add a NaN vertex index into the buffer.
+    /// `breaks` is run every time there is a necessary break in the line
+    /// strip. Use this to, for example, swap out the buffer using
+    /// [`std::mem::swap`], or push a NaN index into the buffer.
     ///
-    pub fn get_line_indices(&self, triangle: usize, buffer: &mut Vec<u32>, delta: usize) {
-        self.triangles[triangle].add_line_indices(buffer, &self.shared_edges, delta as u32);
+    pub fn get_line_indices(&self, buffer: &mut Vec<u32>, triangle: usize, delta: usize, breaks: impl FnMut(&mut Vec<u32>)) {
+        self.triangles[triangle].add_line_indices(buffer, &self.shared_edges, delta as u32, breaks);
     }
 
     ///
@@ -1083,29 +1091,21 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
     ///
     /// Gets the wireframe indices for all main triangles in the shape,
-    /// as well as all edges. This pads with NaN indices automatically.
+    /// as well as all edges.
     ///
-    /// The NaN vertex is assumed to be at index zero, so all of the
-    /// indices are shifted by one from what their triangle counterpart
-    /// would be.
+    /// See [`Self::get_line_indices`] for more on `delta`, and `breaks`.
     ///
-    /// Do not forget to actually insert the NaN vertex into the buffer
-    /// returned by [`Self::raw_points`].
-    ///
-    pub fn get_all_line_indices(&self) -> Vec<u32> {
+    pub fn get_all_line_indices(&self, delta: usize, mut breaks: impl FnMut(&mut Vec<u32>)) -> Vec<u32> {
         let mut buffer = Vec::new();
 
         for i in 0..self.triangles.len() {
-            self.get_line_indices(i, &mut buffer, 1);
-            buffer.push(0);
+            self.get_line_indices(&mut buffer, i, delta, &mut breaks);
         }
 
         for i in 0..self.shared_edges.len() {
-            self.get_major_edge_line_indices(i, &mut buffer, 1);
-            buffer.push(0);
+            self.get_major_edge_line_indices(i, &mut buffer, delta);
+            breaks(&mut buffer);
         }
-
-        buffer.pop();
 
         buffer
     }
