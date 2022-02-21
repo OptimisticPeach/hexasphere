@@ -703,6 +703,46 @@ impl TriangleContents {
             }
         }
     }
+
+    ///
+    /// Adds the indices for a wireframe of the triangles
+    /// in this portion of the triangle to the specified
+    /// buffer in order.
+    ///
+    pub fn add_line_indices(&self, buffer: &mut Vec<u32>, delta: u32) {
+        use TriangleContents::*;
+        match self {
+            None | One(_) | Three { .. } => {}
+            &Six {
+                ab,
+                bc,
+                ca,
+                ..
+            } => buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]),
+            &More {
+                ref sides,
+                my_side_length,
+                ref contents,
+                ..
+            } => {
+                let my_side_length = my_side_length as usize;
+                let ab = &sides[0..my_side_length];
+                let bc = &sides[my_side_length..my_side_length * 2];
+                let ca = &sides[my_side_length * 2..];
+
+                // Contents are always stored forward.
+                add_line_indices_triangular(
+                    delta,
+                    Forward(ab),
+                    Forward(bc),
+                    Forward(ca),
+                    &**contents,
+                    buffer,
+                );
+                contents.add_line_indices(buffer, delta);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -866,6 +906,32 @@ impl Triangle {
 
         self.contents.add_indices(buffer);
     }
+
+    ///
+    /// Appends the indices of all the subtriangles' wireframes
+    /// onto the specified buffer.
+    ///
+    fn add_line_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge], delta: u32) {
+        let ab = if self.ab_forward {
+            Forward(&edges[self.ab_edge].points)
+        } else {
+            Backward(&edges[self.ab_edge].points)
+        };
+        let bc = if self.bc_forward {
+            Forward(&edges[self.bc_edge].points)
+        } else {
+            Backward(&edges[self.bc_edge].points)
+        };
+        let ca = if self.ca_forward {
+            Forward(&edges[self.ca_edge].points)
+        } else {
+            Backward(&edges[self.ca_edge].points)
+        };
+
+        add_line_indices_triangular(delta, ab, bc, ca, &self.contents, buffer);
+
+        self.contents.add_line_indices(buffer, delta);
+    }
 }
 
 ///
@@ -984,6 +1050,62 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         for i in 0..self.triangles.len() {
             self.get_indices(i, &mut buffer);
         }
+
+        buffer
+    }
+
+    ///
+    /// Gets the wireframe indices for the contents of a specified triangle.
+    ///
+    /// `delta` is added to all of the indices pushed into the buffer, and
+    /// is generally intended to be used to have a NaN vertex at zero. Set
+    /// to zero to produce the indices as if there was no NaN vertex.
+    ///
+    /// This does not add a NaN vertex index into the buffer.
+    ///
+    pub fn get_line_indices(&self, triangle: usize, buffer: &mut Vec<u32>, delta: usize) {
+        self.triangles[triangle].add_line_indices(buffer, &self.shared_edges, delta as u32);
+    }
+
+    ///
+    /// Gets the wireframe indices for the specified edge of the base shape.
+    ///
+    /// See [`Self::get_line_indices`] for more on `delta`.
+    ///
+    pub fn get_major_edge_line_indices(&self, edge: usize, buffer: &mut Vec<u32>, delta: usize) {
+        buffer.extend(
+            self.shared_edges[edge]
+                .points
+                .iter()
+                .map(|x| x + delta as u32)
+        );
+    }
+
+    ///
+    /// Gets the wireframe indices for all main triangles in the shape,
+    /// as well as all edges. This pads with NaN indices automatically.
+    ///
+    /// The NaN vertex is assumed to be at index zero, so all of the
+    /// indices are shifted by one from what their triangle counterpart
+    /// would be.
+    ///
+    /// Do not forget to actually insert the NaN vertex into the buffer
+    /// returned by [`Self::raw_points`].
+    ///
+    pub fn get_all_line_indices(&self) -> Vec<u32> {
+        let mut buffer = Vec::new();
+
+        for i in 0..self.triangles.len() {
+            self.get_line_indices(i, &mut buffer, 1);
+            buffer.push(0);
+        }
+
+        for i in 0..self.shared_edges.len() {
+            self.get_major_edge_line_indices(i, &mut buffer, 1);
+            buffer.push(0);
+        }
+
+        buffer.pop();
 
         buffer
     }
@@ -1203,6 +1325,67 @@ fn add_indices_triangular(
     ]);
 }
 
+///
+/// Adds the indices of the triangles in this "layer" of the triangle to
+/// the buffer in line strip format.
+///
+/// This is used to create a wireframe look.
+///
+// Like the previous function, this logic has been worked out mostly on
+// pen and paper and it is therefore difficult to read.
+fn add_line_indices_triangular(
+    delta: u32,
+    ab: Slice<u32>,
+    bc: Slice<u32>,
+    ca: Slice<u32>,
+    contents: &TriangleContents,
+    buffer: &mut Vec<u32>,
+) {
+    if ab.len() == 1 {
+        buffer.extend_from_slice(&[ab[0] + delta, bc[0] + delta, ca[0] + delta]);
+        return;
+    }
+
+    buffer.reserve((ab.len() - 1) * 9);
+
+    if ab.len() != 2 {
+        for i in 0..ab.len() - 2 {
+            buffer.push(contents.idx_ab(i) + delta);
+        }
+
+        for i in 0..bc.len() - 2 {
+            buffer.push(contents.idx_bc(i) + delta);
+        }
+
+        for i in 0..ca.len() - 2 {
+            buffer.push(contents.idx_ca(i) + delta);
+        }
+    } else {
+        buffer.push(contents.idx_ca(0) + delta);
+    }
+
+    buffer.push(ab[0] + delta);
+
+    for i in (1..ca.len()).rev() {
+        buffer.push(ca[i] + delta);
+        buffer.push(contents.idx_ca(i - 1) + delta);
+    }
+
+    buffer.push(ca[0] + delta);
+
+    for i in (1..bc.len()).rev() {
+        buffer.push(bc[i] + delta);
+        buffer.push(contents.idx_bc(i - 1) + delta);
+    }
+
+    buffer.push(bc[0] + delta);
+
+    for i in (1..ab.len()).rev() {
+        buffer.push(ab[i] + delta);
+        buffer.push(contents.idx_ab(i - 1) + delta);
+    }
+}
+
 #[cfg(feature = "adjacency")]
 ///
 /// Implements neighbour tracking.
@@ -1274,6 +1457,10 @@ mod adjacency {
             add_triangle(a, b, c);
             add_triangle(b, c, a);
             add_triangle(c, a, b);
+        }
+
+        pub fn subdivisions(&self) -> usize {
+            self.subdivisions
         }
     }
 }
@@ -1472,6 +1659,73 @@ mod tests {
         for i in sphere.raw_points() {
             assert!(i.length() - 1.0 <= EPSILON);
         }
+    }
+
+    #[test]
+    fn line_one() {
+        use super::add_line_indices_triangular;
+        use super::TriangleContents;
+
+        let mut buffer = Vec::new();
+
+        add_line_indices_triangular(
+            0,
+            Forward(&[0]),
+            Forward(&[1]),
+            Forward(&[2]),
+            &TriangleContents::none(),
+            &mut buffer,
+        );
+
+        assert_eq!(buffer, &[0, 1, 2]);
+    }
+
+    #[test]
+    fn line_two() {
+        use super::add_line_indices_triangular;
+        use super::TriangleContents;
+
+        let mut buffer = Vec::new();
+
+        add_line_indices_triangular(
+            0,
+            Forward(&[0, 1]),
+            Forward(&[2, 3]),
+            Forward(&[4, 5]),
+            &TriangleContents::One(6),
+            &mut buffer,
+        );
+
+        assert_eq!(buffer, &[6, 0, 5, 6, 4, 3, 6, 2, 1, 6]);
+    }
+
+    #[test]
+    fn line_three() {
+        use super::add_line_indices_triangular;
+        use super::TriangleContents;
+
+        let mut buffer = Vec::new();
+
+        add_line_indices_triangular(
+            0,
+            Forward(&[0, 1, 2]),
+            Forward(&[3, 4, 5]),
+            Forward(&[6, 7, 8]),
+            &TriangleContents::Three {
+                a: 9,
+                b: 10,
+                c: 11,
+            },
+            &mut buffer
+        );
+
+        assert_eq!(
+            buffer,
+            &[
+                9, 10, 11,
+                0, 8, 9, 7, 11, 6, 5, 11, 4, 10, 3, 2, 10, 1, 9
+            ]
+        );
     }
 
     #[cfg(feature = "adjacency")]
