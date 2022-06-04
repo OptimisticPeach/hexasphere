@@ -47,8 +47,8 @@
 
 use glam::Vec3A;
 
-use slice::*;
 use slice::Slice::*;
+use slice::*;
 
 #[cfg(feature = "adjacency")]
 pub use adjacency::*;
@@ -320,7 +320,13 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(ab: Slice<u32>, bc: Slice<u32>, points: &mut Vec<Vec3A>, calculate: bool, shape: &impl BaseShape) -> Self {
+    fn one(
+        ab: Slice<u32>,
+        bc: Slice<u32>,
+        points: &mut Vec<Vec3A>,
+        calculate: bool,
+        shape: &impl BaseShape,
+    ) -> Self {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
         let p1 = points[ab[0] as usize];
@@ -532,7 +538,14 @@ impl TriangleContents {
                     );
                 }
 
-                contents.subdivide(Forward(ab), Forward(bc), Forward(ca), points, calculate, shape);
+                contents.subdivide(
+                    Forward(ab),
+                    Forward(bc),
+                    Forward(ca),
+                    points,
+                    calculate,
+                    shape,
+                );
             }
         }
     }
@@ -709,19 +722,19 @@ impl TriangleContents {
     /// in this portion of the triangle to the specified
     /// buffer in order.
     ///
-    pub fn add_line_indices(&self, buffer: &mut Vec<u32>, delta: u32, mut breaks: impl FnMut(&mut Vec<u32>)) {
+    pub fn add_line_indices(
+        &self,
+        buffer: &mut Vec<u32>,
+        delta: u32,
+        mut breaks: impl FnMut(&mut Vec<u32>),
+    ) {
         use TriangleContents::*;
         match self {
             None | One(_) | Three { .. } => {}
-            &Six {
-                ab,
-                bc,
-                ca,
-                ..
-            } => {
+            &Six { ab, bc, ca, .. } => {
                 buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]);
                 breaks(buffer);
-            },
+            }
             &More {
                 ref sides,
                 my_side_length,
@@ -792,7 +805,14 @@ impl Triangle {
     /// Creates a new `Triangle` given the data. This is done
     /// to avoid boilerplate.
     ///
-    pub const fn new(a: u32, b: u32, c: u32, ab_edge: usize, bc_edge: usize, ca_edge: usize) -> Self {
+    pub const fn new(
+        a: u32,
+        b: u32,
+        c: u32,
+        ab_edge: usize,
+        bc_edge: usize,
+        ca_edge: usize,
+    ) -> Self {
         Self {
             a,
             b,
@@ -881,7 +901,8 @@ impl Triangle {
             } else {
                 Backward(&edges[self.ca_edge].points)
             };
-            self.contents.subdivide(ab, bc, ca, points, calculate, shape);
+            self.contents
+                .subdivide(ab, bc, ca, points, calculate, shape);
         }
     }
 
@@ -915,7 +936,13 @@ impl Triangle {
     /// Appends the indices of all the subtriangles' wireframes
     /// onto the specified buffer.
     ///
-    fn add_line_indices(&self, buffer: &mut Vec<u32>, edges: &[Edge], delta: u32, mut breaks: impl FnMut(&mut Vec<u32>)) {
+    fn add_line_indices(
+        &self,
+        buffer: &mut Vec<u32>,
+        edges: &[Edge],
+        delta: u32,
+        mut breaks: impl FnMut(&mut Vec<u32>),
+    ) {
         let ab = if self.ab_forward {
             Forward(&edges[self.ab_edge].points)
         } else {
@@ -978,7 +1005,11 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// - `generator` is a function run once all the subdivisions are
     /// applied and its values are stored in an internal `Vec`.
     ///
-    pub fn new_custom_shape(subdivisions: usize, generator: impl FnMut(Vec3A) -> T, shape: S) -> Self {
+    pub fn new_custom_shape(
+        subdivisions: usize,
+        generator: impl FnMut(Vec3A) -> T,
+        shape: S,
+    ) -> Self {
         let mut this = Self {
             points: shape.initial_points(),
             shared_edges: {
@@ -1020,7 +1051,12 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
 
         for triangle in &mut *self.triangles {
-            triangle.subdivide(&mut *self.shared_edges, &mut self.points, calculate, &self.shape);
+            triangle.subdivide(
+                &mut *self.shared_edges,
+                &mut self.points,
+                calculate,
+                &self.shape,
+            );
         }
     }
 
@@ -1071,7 +1107,13 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// strip. Use this to, for example, swap out the buffer using
     /// [`std::mem::swap`], or push a NaN index into the buffer.
     ///
-    pub fn get_line_indices(&self, buffer: &mut Vec<u32>, triangle: usize, delta: usize, breaks: impl FnMut(&mut Vec<u32>)) {
+    pub fn get_line_indices(
+        &self,
+        buffer: &mut Vec<u32>,
+        triangle: usize,
+        delta: usize,
+        breaks: impl FnMut(&mut Vec<u32>),
+    ) {
         self.triangles[triangle].add_line_indices(buffer, &self.shared_edges, delta as u32, breaks);
     }
 
@@ -1085,7 +1127,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             self.shared_edges[edge]
                 .points
                 .iter()
-                .map(|x| x + delta as u32)
+                .map(|x| x + delta as u32),
         );
     }
 
@@ -1095,7 +1137,11 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     /// See [`Self::get_line_indices`] for more on `delta`, and `breaks`.
     ///
-    pub fn get_all_line_indices(&self, delta: usize, mut breaks: impl FnMut(&mut Vec<u32>)) -> Vec<u32> {
+    pub fn get_all_line_indices(
+        &self,
+        delta: usize,
+        mut breaks: impl FnMut(&mut Vec<u32>),
+    ) -> Vec<u32> {
         let mut buffer = Vec::new();
 
         for i in 0..self.triangles.len() {
@@ -1711,26 +1757,19 @@ mod tests {
             Forward(&[0, 1, 2]),
             Forward(&[3, 4, 5]),
             Forward(&[6, 7, 8]),
-            &TriangleContents::Three {
-                a: 9,
-                b: 10,
-                c: 11,
-            },
-            &mut buffer
+            &TriangleContents::Three { a: 9, b: 10, c: 11 },
+            &mut buffer,
         );
 
         assert_eq!(
             buffer,
-            &[
-                9, 10, 11,
-                0, 8, 9, 7, 11, 6, 5, 11, 4, 10, 3, 2, 10, 1, 9
-            ]
+            &[9, 10, 11, 0, 8, 9, 7, 11, 6, 5, 11, 4, 10, 3, 2, 10, 1, 9]
         );
     }
 
     #[cfg(feature = "adjacency")]
     mod adjacency {
-        use crate::{AdjacentStore, shapes::IcoSphere};
+        use crate::{shapes::IcoSphere, AdjacentStore};
 
         #[test]
         fn creation() {

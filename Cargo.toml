@@ -19,6 +19,6 @@ adjacency = ["smallvec"]
 
 [dependencies]
 glam = "0.20"
-lazy_static = "1.4"
+once_cell = "1.4"
 
 smallvec = { version = "1.4.2", optional = true }
