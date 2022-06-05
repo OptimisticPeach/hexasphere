@@ -1,11 +1,4 @@
-use super::{
-    BaseShape,
-    Triangle,
-    interpolation,
-    EquilateralBaseShape,
-    Subdivided,
-
-};
+use super::{interpolation, BaseShape, EquilateralBaseShape, Subdivided, Triangle};
 use glam::Vec3A;
 
 ///
@@ -48,7 +41,7 @@ impl BaseShape for IcoSphereBase {
     }
 
     #[inline]
-    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A])  {
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         interpolation::geometric_slerp_multiple(a, b, indices, points);
     }
 }
@@ -171,7 +164,9 @@ impl BaseShape for TriangleBase {
 
     #[inline]
     fn triangles(&self) -> Box<[Triangle]> {
-        core::slice::from_ref(&consts::triangle::TRIANGLE).to_vec().into()
+        core::slice::from_ref(&consts::triangle::TRIANGLE)
+            .to_vec()
+            .into()
     }
     const EDGES: usize = consts::triangle::EDGES;
 
@@ -194,7 +189,7 @@ impl BaseShape for TriangleBase {
 impl EquilateralBaseShape for TriangleBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
-        core::slice::from_ref(&*consts::triangle::TRIANGLE_NORMAL)
+        core::slice::from_ref(&consts::triangle::TRIANGLE_NORMAL)
     }
 
     #[inline]
@@ -313,19 +308,17 @@ mod consts {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
 
-        lazy_static::lazy_static! {
-            pub(crate) static ref INITIAL_POINTS: [Vec3A; 4] = [
-                Vec3A::new(1.0, 0.0, 1.0),
-                Vec3A::new(1.0, 0.0, -1.0),
-                Vec3A::new(-1.0, 0.0, -1.0),
-                Vec3A::new(-1.0, 0.0, 1.0),
-            ];
+        pub(crate) const INITIAL_POINTS: [Vec3A; 4] = [
+            glam::const_vec3a!([1.0, 0.0, 1.0]),
+            glam::const_vec3a!([1.0, 0.0, -1.0]),
+            glam::const_vec3a!([-1.0, 0.0, -1.0]),
+            glam::const_vec3a!([-1.0, 0.0, 1.0]),
+        ];
 
-            pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 2] = [
-                Vec3A::new(0.0, 1.0, 0.0),
-                Vec3A::new(0.0, 1.0, 0.0),
-            ];
-        }
+        pub(crate) const TRIANGLE_NORMALS: [Vec3A; 2] = [
+            glam::const_vec3a!([0.0, 1.0, 0.0]),
+            glam::const_vec3a!([0.0, 1.0, 0.0]),
+        ];
 
         pub const TRIANGLES: [Triangle; 2] = [
             Triangle {
@@ -361,16 +354,17 @@ mod consts {
     pub mod triangle {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
+        use once_cell::sync::Lazy;
 
-        lazy_static::lazy_static! {
-            pub(crate) static ref INITIAL_POINTS: [Vec3A; 3] = [
+        pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 3]> = Lazy::new(|| {
+            [
                 Vec3A::new(-3.0f32.sqrt() / 2.0, 0.0, -0.5),
-                Vec3A::new( 3.0f32.sqrt() / 2.0, 0.0, -0.5),
+                Vec3A::new(3.0f32.sqrt() / 2.0, 0.0, -0.5),
                 Vec3A::new(0.0, 0.0, 1.0),
-            ];
+            ]
+        });
 
-            pub(crate) static ref TRIANGLE_NORMAL: Vec3A = Vec3A::new(0.0, 1.0, 0.0);
-        }
+        pub(crate) const TRIANGLE_NORMAL: Vec3A = glam::const_vec3a!([0.0, 1.0, 0.0]);
 
         pub const TRIANGLE: Triangle = Triangle {
             a: 2,
@@ -391,34 +385,29 @@ mod consts {
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
+        use once_cell::sync::Lazy;
 
-        lazy_static::lazy_static! {
-            pub(crate) static ref INITIAL_POINTS: [Vec3A; 4] = [
+        pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 4]> = Lazy::new(|| {
+            [
                 Vec3A::new((8.0f32).sqrt() / 3.0, -1.0 / 3.0, 0.0),
                 Vec3A::new(-(2.0f32).sqrt() / 3.0, -1.0 / 3.0, (2.0f32 / 3.0).sqrt()),
                 Vec3A::new(-(2.0f32).sqrt() / 3.0, -1.0 / 3.0, -(2.0f32 / 3.0).sqrt()),
                 Vec3A::new(0.0, 1.0, 0.0),
-            ];
+            ]
+        });
 
-            pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 4] = {
-                fn normal(triangle: usize) -> Vec3A {
-                    (
-                        INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
-                        INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
-                        INITIAL_POINTS[TRIANGLES[triangle].c as usize]
-                    ) / 3.0
-                }
+        pub(crate) static MIN_NORMAL_DOT: Lazy<f32> = Lazy::new(|| 7.0f32.sqrt() / 3.0);
 
-                [
-                    normal(0),
-                    normal(1),
-                    normal(2),
-                    normal(3),
-                ]
-            };
+        pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 4]> = Lazy::new(|| {
+            fn normal(triangle: usize) -> Vec3A {
+                (INITIAL_POINTS[TRIANGLES[triangle].a as usize]
+                    + INITIAL_POINTS[TRIANGLES[triangle].b as usize]
+                    + INITIAL_POINTS[TRIANGLES[triangle].c as usize])
+                    / 3.0
+            }
 
-            pub(crate) static ref MIN_NORMAL_DOT: f32 = 7.0f32.sqrt() / 3.0;
-        }
+            [normal(0), normal(1), normal(2), normal(3)]
+        });
 
         pub const TRIANGLES: [Triangle; 4] = [
             Triangle {
@@ -472,31 +461,28 @@ mod consts {
                 bc_forward: false,
                 ca_forward: false,
                 contents: TriangleContents::None,
-
-            }
+            },
         ];
         pub const EDGES: usize = 6;
     }
     pub mod cube {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
+        use once_cell::sync::Lazy;
 
-        lazy_static::lazy_static! {
-            pub(crate) static ref INITIAL_POINTS: [Vec3A; 8] = {
-                let val = (3.0f32).sqrt().recip();
-                [
-                    Vec3A::new(-val, -val, -val),
-                    Vec3A::new( val, -val, -val),
-                    Vec3A::new(-val,  val, -val),
-                    Vec3A::new( val,  val, -val),
-
-                    Vec3A::new(-val, -val,  val),
-                    Vec3A::new( val, -val,  val),
-                    Vec3A::new(-val,  val,  val),
-                    Vec3A::new( val,  val,  val),
-                ]
-            };
-        }
+        pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 8]> = Lazy::new(|| {
+            let val = (3.0f32).sqrt().recip();
+            [
+                Vec3A::new(-val, -val, -val),
+                Vec3A::new(val, -val, -val),
+                Vec3A::new(-val, val, -val),
+                Vec3A::new(val, val, -val),
+                Vec3A::new(-val, -val, val),
+                Vec3A::new(val, -val, val),
+                Vec3A::new(-val, val, val),
+                Vec3A::new(val, val, val),
+            ]
+        });
 
         pub const TRIANGLES: [Triangle; 12] = [
             // Back
@@ -668,117 +654,101 @@ mod consts {
     pub mod icosphere {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
+        use once_cell::sync::Lazy;
 
-        lazy_static::lazy_static! {
-            pub(crate) static ref INITIAL_POINTS: [Vec3A; 12] = [
-                Vec3A::from(RAW_POINTS[0]),
-                Vec3A::from(RAW_POINTS[1]),
-                Vec3A::from(RAW_POINTS[2]),
-                Vec3A::from(RAW_POINTS[3]),
-                Vec3A::from(RAW_POINTS[4]),
-                Vec3A::from(RAW_POINTS[5]),
-                Vec3A::from(RAW_POINTS[6]),
-                Vec3A::from(RAW_POINTS[7]),
-                Vec3A::from(RAW_POINTS[8]),
-                Vec3A::from(RAW_POINTS[9]),
-                Vec3A::from(RAW_POINTS[10]),
-                Vec3A::from(RAW_POINTS[11]),
-            ];
-
-            pub(crate) static ref TRIANGLE_NORMALS: [Vec3A; 20] = {
-                fn normal(triangle: usize) -> Vec3A {
-                    (
-                        INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
-                        INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
-                        INITIAL_POINTS[TRIANGLES[triangle].c as usize]
-                    ) / 3.0
-                }
-
-                [
-                    normal(0),
-                    normal(1),
-                    normal(2),
-                    normal(3),
-                    normal(4),
-                    normal(5),
-                    normal(6),
-                    normal(7),
-                    normal(8),
-                    normal(9),
-                    normal(10),
-                    normal(11),
-                    normal(12),
-                    normal(13),
-                    normal(14),
-                    normal(15),
-                    normal(16),
-                    normal(17),
-                    normal(18),
-                    normal(19),
-                ]
-            };
-
-            pub(crate) static ref MIN_NORMAL_DOT: f32 = ((1.0f32 / 30.0) * (25.0 + 5.0_f32.sqrt())).sqrt();
-        }
-
-        const RAW_POINTS: [[f32; 3]; 12] = [
+        pub(crate) const INITIAL_POINTS: [Vec3A; 12] = [
             // North Pole
-            [0.0, 1.0, 0.0],
+            glam::const_vec3a!([0.0, 1.0, 0.0]),
             // Top Ring
-            [
+            glam::const_vec3a!([
                 0.89442719099991585541,
                 0.44721359549995792770,
                 0.00000000000000000000,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 0.27639320225002106390,
                 0.44721359549995792770,
                 0.85065080835203987775,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 -0.72360679774997882507,
                 0.44721359549995792770,
                 0.52573111211913370333,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 -0.72360679774997904712,
                 0.44721359549995792770,
                 -0.52573111211913348129,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 0.27639320225002084186,
                 0.44721359549995792770,
                 -0.85065080835203998877,
-            ],
+            ]),
             // Bottom Ring
-            [
+            glam::const_vec3a!([
                 0.72360679774997871405,
                 -0.44721359549995792770,
                 -0.52573111211913392538,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 0.72360679774997904712,
                 -0.44721359549995792770,
                 0.52573111211913337026,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 -0.27639320225002073084,
                 -0.44721359549995792770,
                 0.85065080835203998877,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 -0.89442719099991585541,
                 -0.44721359549995792770,
                 0.00000000000000000000,
-            ],
-            [
+            ]),
+            glam::const_vec3a!([
                 -0.27639320225002139697,
                 -0.44721359549995792770,
                 -0.85065080835203976672,
-            ],
+            ]),
             // South Pole
-            [0.0, -1.0, 0.0],
+            glam::const_vec3a!([0.0, -1.0, 0.0]),
         ];
+
+        pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 20]> = Lazy::new(|| {
+            fn normal(triangle: usize) -> Vec3A {
+                (INITIAL_POINTS[TRIANGLES[triangle].a as usize]
+                    + INITIAL_POINTS[TRIANGLES[triangle].b as usize]
+                    + INITIAL_POINTS[TRIANGLES[triangle].c as usize])
+                    / 3.0
+            }
+
+            [
+                normal(0),
+                normal(1),
+                normal(2),
+                normal(3),
+                normal(4),
+                normal(5),
+                normal(6),
+                normal(7),
+                normal(8),
+                normal(9),
+                normal(10),
+                normal(11),
+                normal(12),
+                normal(13),
+                normal(14),
+                normal(15),
+                normal(16),
+                normal(17),
+                normal(18),
+                normal(19),
+            ]
+        });
+
+        pub(crate) static MIN_NORMAL_DOT: Lazy<f32> =
+            Lazy::new(|| ((1.0f32 / 30.0) * (25.0 + 5.0_f32.sqrt())).sqrt());
 
         pub const TRIANGLES: [Triangle; 20] = [
             // Top
