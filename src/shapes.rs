@@ -82,6 +82,61 @@ impl<T> IcoSphere<T> {
 }
 
 ///
+/// Implements the same shape as [`IcoSphereBase`], however
+/// it uses normalized linear interpolation, rather than
+/// geometric spherical linear interpolation. (`nlerp` over `slerp`).
+///
+#[derive(Default, Copy, Clone, Debug)]
+pub struct NormIcoSphereBase;
+
+impl BaseShape for NormIcoSphereBase {
+    #[inline]
+    fn initial_points(&self) -> Vec<Vec3A> {
+        consts::icosphere::INITIAL_POINTS.to_vec()
+    }
+
+    #[inline]
+    fn triangles(&self) -> Box<[Triangle]> {
+        Box::new(consts::icosphere::TRIANGLES)
+    }
+    const EDGES: usize = consts::icosphere::EDGES;
+
+    #[inline]
+    fn interpolate(&self, a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
+        interpolation::normalized_lerp(a, b, p)
+    }
+
+    #[inline]
+    fn interpolate_half(&self, a: Vec3A, b: Vec3A) -> Vec3A {
+        interpolation::normalized_lerp_half(a, b)
+    }
+
+    #[inline]
+    fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
+        interpolation::normalized_lerp_multiple(a, b, indices, points);
+    }
+}
+
+impl EquilateralBaseShape for NormIcoSphereBase {
+    #[inline]
+    fn triangle_normals() -> &'static [Vec3A] {
+        &*consts::icosphere::TRIANGLE_NORMALS
+    }
+
+    #[inline]
+    fn triangle_min_dot() -> f32 {
+        *consts::icosphere::MIN_NORMAL_DOT
+    }
+}
+
+///
+/// Normalized Icosphere.
+///
+/// See [`NormIcoSphereBase`].
+///
+pub type NormIcoSphere<T> = Subdivided<T, NormIcoSphereBase>;
+
+///
 /// Implements a tetrahedron as the base shape.
 ///
 /// - 4 vertices
@@ -308,16 +363,12 @@ mod consts {
         use crate::{Triangle, TriangleContents};
         use glam::Vec3A;
 
+        #[rustfmt::skip]
         pub(crate) const INITIAL_POINTS: [Vec3A; 4] = [
-            glam::const_vec3a!([1.0, 0.0, 1.0]),
-            glam::const_vec3a!([1.0, 0.0, -1.0]),
+            glam::const_vec3a!([ 1.0, 0.0,  1.0]),
+            glam::const_vec3a!([ 1.0, 0.0, -1.0]),
             glam::const_vec3a!([-1.0, 0.0, -1.0]),
-            glam::const_vec3a!([-1.0, 0.0, 1.0]),
-        ];
-
-        pub(crate) const TRIANGLE_NORMALS: [Vec3A; 2] = [
-            glam::const_vec3a!([0.0, 1.0, 0.0]),
-            glam::const_vec3a!([0.0, 1.0, 0.0]),
+            glam::const_vec3a!([-1.0, 0.0,  1.0]),
         ];
 
         pub const TRIANGLES: [Triangle; 2] = [
@@ -359,7 +410,7 @@ mod consts {
         pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 3]> = Lazy::new(|| {
             [
                 Vec3A::new(-3.0f32.sqrt() / 2.0, 0.0, -0.5),
-                Vec3A::new(3.0f32.sqrt() / 2.0, 0.0, -0.5),
+                Vec3A::new( 3.0f32.sqrt() / 2.0, 0.0, -0.5),
                 Vec3A::new(0.0, 0.0, 1.0),
             ]
         });
@@ -399,11 +450,13 @@ mod consts {
         pub(crate) static MIN_NORMAL_DOT: Lazy<f32> = Lazy::new(|| 7.0f32.sqrt() / 3.0);
 
         pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 4]> = Lazy::new(|| {
+            #[rustfmt::skip]
             fn normal(triangle: usize) -> Vec3A {
-                (INITIAL_POINTS[TRIANGLES[triangle].a as usize]
-                    + INITIAL_POINTS[TRIANGLES[triangle].b as usize]
-                    + INITIAL_POINTS[TRIANGLES[triangle].c as usize])
-                    / 3.0
+                (
+                    INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
+                    INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
+                    INITIAL_POINTS[TRIANGLES[triangle].c as usize]
+                ) / 3.0
             }
 
             [normal(0), normal(1), normal(2), normal(3)]
@@ -470,17 +523,19 @@ mod consts {
         use glam::Vec3A;
         use once_cell::sync::Lazy;
 
+        #[rustfmt::skip]
         pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 8]> = Lazy::new(|| {
             let val = (3.0f32).sqrt().recip();
             [
                 Vec3A::new(-val, -val, -val),
-                Vec3A::new(val, -val, -val),
-                Vec3A::new(-val, val, -val),
-                Vec3A::new(val, val, -val),
-                Vec3A::new(-val, -val, val),
-                Vec3A::new(val, -val, val),
-                Vec3A::new(-val, val, val),
-                Vec3A::new(val, val, val),
+                Vec3A::new( val, -val, -val),
+                Vec3A::new(-val,  val, -val),
+                Vec3A::new( val,  val, -val),
+
+                Vec3A::new(-val, -val,  val),
+                Vec3A::new( val, -val,  val),
+                Vec3A::new(-val,  val,  val),
+                Vec3A::new( val,  val,  val),
             ]
         });
 
@@ -716,11 +771,13 @@ mod consts {
         ];
 
         pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 20]> = Lazy::new(|| {
+            #[rustfmt::skip]
             fn normal(triangle: usize) -> Vec3A {
-                (INITIAL_POINTS[TRIANGLES[triangle].a as usize]
-                    + INITIAL_POINTS[TRIANGLES[triangle].b as usize]
-                    + INITIAL_POINTS[TRIANGLES[triangle].c as usize])
-                    / 3.0
+                (
+                    INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
+                    INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
+                    INITIAL_POINTS[TRIANGLES[triangle].c as usize]
+                ) / 3.0
             }
 
             [
