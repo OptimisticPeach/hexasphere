@@ -365,10 +365,10 @@ mod consts {
 
         #[rustfmt::skip]
         pub(crate) const INITIAL_POINTS: [Vec3A; 4] = [
-            glam::const_vec3a!([ 1.0, 0.0,  1.0]),
-            glam::const_vec3a!([ 1.0, 0.0, -1.0]),
-            glam::const_vec3a!([-1.0, 0.0, -1.0]),
-            glam::const_vec3a!([-1.0, 0.0,  1.0]),
+            glam::Vec3A::new( 1.0, 0.0,  1.0),
+            glam::Vec3A::new( 1.0, 0.0, -1.0),
+            glam::Vec3A::new(-1.0, 0.0, -1.0),
+            glam::Vec3A::new(-1.0, 0.0,  1.0),
         ];
 
         pub const TRIANGLES: [Triangle; 2] = [
@@ -415,7 +415,7 @@ mod consts {
             ]
         });
 
-        pub(crate) const TRIANGLE_NORMAL: Vec3A = glam::const_vec3a!([0.0, 1.0, 0.0]);
+        pub(crate) const TRIANGLE_NORMAL: Vec3A = glam::Vec3A::Y;
 
         pub const TRIANGLE: Triangle = Triangle {
             a: 2,
@@ -713,61 +713,61 @@ mod consts {
 
         pub(crate) const INITIAL_POINTS: [Vec3A; 12] = [
             // North Pole
-            glam::const_vec3a!([0.0, 1.0, 0.0]),
+            glam::Vec3A::Y,
             // Top Ring
-            glam::const_vec3a!([
+            glam::Vec3A::new(
                 0.89442719099991585541,
                 0.44721359549995792770,
                 0.00000000000000000000,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 0.27639320225002106390,
                 0.44721359549995792770,
                 0.85065080835203987775,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 -0.72360679774997882507,
                 0.44721359549995792770,
                 0.52573111211913370333,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 -0.72360679774997904712,
                 0.44721359549995792770,
                 -0.52573111211913348129,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 0.27639320225002084186,
                 0.44721359549995792770,
                 -0.85065080835203998877,
-            ]),
+            ),
             // Bottom Ring
-            glam::const_vec3a!([
+            glam::Vec3A::new(
                 0.72360679774997871405,
                 -0.44721359549995792770,
                 -0.52573111211913392538,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 0.72360679774997904712,
                 -0.44721359549995792770,
                 0.52573111211913337026,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 -0.27639320225002073084,
                 -0.44721359549995792770,
                 0.85065080835203998877,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 -0.89442719099991585541,
                 -0.44721359549995792770,
                 0.00000000000000000000,
-            ]),
-            glam::const_vec3a!([
+            ),
+            glam::Vec3A::new(
                 -0.27639320225002139697,
                 -0.44721359549995792770,
                 -0.85065080835203976672,
-            ]),
+            ),
             // South Pole
-            glam::const_vec3a!([0.0, -1.0, 0.0]),
+            glam::Vec3A::NEG_Y,
         ];
 
         pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 20]> = Lazy::new(|| {
