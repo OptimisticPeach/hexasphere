@@ -1045,7 +1045,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// to recalculate vertices (To not calculate vertices between many
     /// subdivisions).
     ///
-    fn subdivide(&mut self, calculate: bool) {
+    pub fn subdivide(&mut self, calculate: bool) {
         for Edge { done, .. } in &mut *self.shared_edges {
             *done = false;
         }
