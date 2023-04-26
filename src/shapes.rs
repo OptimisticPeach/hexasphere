@@ -54,7 +54,7 @@ impl EquilateralBaseShape for IcoSphereBase {
 
     #[inline]
     fn triangle_min_dot() -> f32 {
-        *consts::icosphere::MIN_NORMAL_DOT
+        consts::icosphere::MIN_NORMAL_DOT
     }
 }
 
@@ -125,7 +125,7 @@ impl EquilateralBaseShape for NormIcoSphereBase {
 
     #[inline]
     fn triangle_min_dot() -> f32 {
-        *consts::icosphere::MIN_NORMAL_DOT
+        consts::icosphere::MIN_NORMAL_DOT
     }
 }
 
@@ -187,7 +187,7 @@ impl EquilateralBaseShape for TetraSphereBase {
 
     #[inline]
     fn triangle_min_dot() -> f32 {
-        *consts::tetrasphere::MIN_NORMAL_DOT
+        consts::tetrasphere::MIN_NORMAL_DOT
     }
 }
 
@@ -404,16 +404,18 @@ mod consts {
     }
     pub mod triangle {
         use crate::{Triangle, TriangleContents};
+        use const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
-        use once_cell::sync::Lazy;
 
-        pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 3]> = Lazy::new(|| {
-            [
-                Vec3A::new(-3.0f32.sqrt() / 2.0, 0.0, -0.5),
-                Vec3A::new( 3.0f32.sqrt() / 2.0, 0.0, -0.5),
-                Vec3A::new(0.0, 0.0, 1.0),
-            ]
-        });
+        pub(crate) static INITIAL_POINTS: [Vec3A; 3] = [
+            Vec3A::new(
+                SoftF32(-3.0f32).sqrt().div(SoftF32(2.0)).to_f32(),
+                0.0,
+                -0.5,
+            ),
+            Vec3A::new(SoftF32(3.0f32).sqrt().div(SoftF32(2.0)).to_f32(), 0.0, -0.5),
+            Vec3A::new(0.0, 0.0, 1.0),
+        ];
 
         pub(crate) const TRIANGLE_NORMAL: Vec3A = glam::Vec3A::Y;
 
@@ -435,19 +437,30 @@ mod consts {
     }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
+        use const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
         use once_cell::sync::Lazy;
 
-        pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 4]> = Lazy::new(|| {
-            [
-                Vec3A::new((8.0f32).sqrt() / 3.0, -1.0 / 3.0, 0.0),
-                Vec3A::new(-(2.0f32).sqrt() / 3.0, -1.0 / 3.0, (2.0f32 / 3.0).sqrt()),
-                Vec3A::new(-(2.0f32).sqrt() / 3.0, -1.0 / 3.0, -(2.0f32 / 3.0).sqrt()),
-                Vec3A::new(0.0, 1.0, 0.0),
-            ]
-        });
+        pub(crate) static INITIAL_POINTS: [Vec3A; 4] = [
+            Vec3A::new(
+                SoftF32(8.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
+                0.0,
+            ),
+            Vec3A::new(
+                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
+                SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().to_f32(),
+            ),
+            Vec3A::new(
+                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
+                SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().neg().to_f32(),
+            ),
+            Vec3A::new(0.0, 1.0, 0.0),
+        ];
 
-        pub(crate) static MIN_NORMAL_DOT: Lazy<f32> = Lazy::new(|| 7.0f32.sqrt() / 3.0);
+        pub(crate) static MIN_NORMAL_DOT: f32 = SoftF32(7.0f32).sqrt().div(SoftF32(3.0)).to_f32();
 
         pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 4]> = Lazy::new(|| {
             #[rustfmt::skip]
@@ -520,12 +533,12 @@ mod consts {
     }
     pub mod cube {
         use crate::{Triangle, TriangleContents};
+        use const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
-        use once_cell::sync::Lazy;
 
         #[rustfmt::skip]
-        pub(crate) static INITIAL_POINTS: Lazy<[Vec3A; 8]> = Lazy::new(|| {
-            let val = (3.0f32).sqrt().recip();
+        pub(crate) static INITIAL_POINTS: [Vec3A; 8] = {
+            let val = SoftF32(1.0).div(SoftF32(3.0f32).sqrt()).to_f32();
             [
                 Vec3A::new(-val, -val, -val),
                 Vec3A::new( val, -val, -val),
@@ -537,7 +550,7 @@ mod consts {
                 Vec3A::new(-val,  val,  val),
                 Vec3A::new( val,  val,  val),
             ]
-        });
+        };
 
         pub const TRIANGLES: [Triangle; 12] = [
             // Back
@@ -708,6 +721,7 @@ mod consts {
     }
     pub mod icosphere {
         use crate::{Triangle, TriangleContents};
+        use const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
         use once_cell::sync::Lazy;
 
@@ -804,8 +818,10 @@ mod consts {
             ]
         });
 
-        pub(crate) static MIN_NORMAL_DOT: Lazy<f32> =
-            Lazy::new(|| ((1.0f32 / 30.0) * (25.0 + 5.0_f32.sqrt())).sqrt());
+        pub(crate) static MIN_NORMAL_DOT: f32 = ((SoftF32(1.0f32).div(SoftF32(30.0)))
+            .mul(SoftF32(25.0).add(SoftF32(5.0_f32)).sqrt()))
+        .sqrt()
+        .to_f32();
 
         pub const TRIANGLES: [Triangle; 20] = [
             // Top
