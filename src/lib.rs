@@ -1445,7 +1445,6 @@ mod adjacency {
     /// Stores the neighbours of a subdivided shape.
     ///
     pub struct AdjacentStore {
-        pub(crate) subdivisions: usize,
         pub(crate) map: HashMap<u32, SmallVec<[u32; 6]>>,
     }
 
@@ -1503,10 +1502,6 @@ mod adjacency {
             add_triangle(a, b, c);
             add_triangle(b, c, a);
             add_triangle(c, a, b);
-        }
-
-        pub fn subdivisions(&self) -> usize {
-            self.subdivisions
         }
     }
 }
