@@ -18,8 +18,7 @@ categories = ["algorithms", "data-structures", "graphics", "mathematics", "rende
 adjacency = ["smallvec"]
 
 [dependencies]
-const_soft_float = "0.1.3"
+constgebra = {git = "https://github.com/knickish/constgebra.git", branch = "feature/vector_helpers"}
 glam = "0.23"
-once_cell = "1.4"
 
 smallvec = { version = "1.4.2", optional = true }
