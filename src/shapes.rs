@@ -437,7 +437,7 @@ mod consts {
     }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
-        use constgebra::{const_soft_float::soft_f32::SoftF32, CVector, Operation};
+        use constgebra::{const_soft_float::soft_f32::SoftF32, CVector};
         use glam::Vec3A;
 
         pub const TRIANGLES: [Triangle; 4] = [
@@ -496,6 +496,7 @@ mod consts {
         ];
         pub const EDGES: usize = 6;
 
+        // https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal
         pub(super) const fn normal<const I: usize>(
             triangles: &[Triangle],
             initial_points: &[Vec3A],
@@ -519,20 +520,37 @@ mod consts {
                 ret
             }
 
-            let result = CVector::new_vector(f32_arr_to_f64(
-                initial_points[triangles[I].a as usize].to_array(),
-            ))
-            .add(CVector::new_vector(f32_arr_to_f64(
-                initial_points[triangles[I].b as usize].to_array(),
-            )))
-            .add(CVector::new_vector(f32_arr_to_f64(
-                initial_points[triangles[I].c as usize].to_array(),
-            )));
-            let result = result.apply_each(Operation::Div(3.0));
-            let result = result.finish_vector();
-            let result = f64_arr_to_f32(result);
-            let result = Vec3A::from_array(result);
-            return result;
+            let triangle = &triangles[I];
+
+            let p1 = CVector::new_vector(f32_arr_to_f64(
+                initial_points[triangle.a as usize].to_array(),
+            ));
+            let p2 = CVector::new_vector(f32_arr_to_f64(
+                initial_points[triangle.b as usize].to_array(),
+            ));
+            let p3 = CVector::new_vector(f32_arr_to_f64(
+                initial_points[triangle.c as usize].to_array(),
+            ));
+
+            let u = f64_arr_to_f32(p2.sub(p1).finish_vector());
+            let v = f64_arr_to_f32(p3.sub(p1).finish_vector());
+
+            let result = [
+                SoftF32(u[1])
+                    .mul(SoftF32(v[2]))
+                    .sub(SoftF32(u[2]).mul(SoftF32(v[1])))
+                    .to_f32(),
+                SoftF32(u[2])
+                    .mul(SoftF32(v[0]))
+                    .sub(SoftF32(u[0]).mul(SoftF32(v[2])))
+                    .to_f32(),
+                SoftF32(u[0])
+                    .mul(SoftF32(v[1]))
+                    .sub(SoftF32(u[1]).mul(SoftF32(v[0])))
+                    .to_f32(),
+            ];
+
+            return Vec3A::from_array(result);
         }
 
         pub(crate) const INITIAL_POINTS: [Vec3A; 4] = [
