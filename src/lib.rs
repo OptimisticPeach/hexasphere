@@ -1437,71 +1437,152 @@ fn add_line_indices_triangular(
 /// Implements neighbour tracking.
 ///
 mod adjacency {
-    use smallvec::SmallVec;
+    use arrayvec::ArrayVec;
     use std::collections::HashMap;
 
-    #[derive(Default, Clone, Debug)]
-    ///
-    /// Stores the neighbours of a subdivided shape.
-    ///
-    pub struct AdjacentStore {
-        pub(crate) map: HashMap<u32, SmallVec<[u32; 6]>>,
+    #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+    pub(crate) enum RehexState {
+        Empty,
+        Clear,
+        TwoTwo,
+        ThreeTwo,
+        TwoTwoTwo,
+        Complete,
     }
 
-    impl AdjacentStore {
-        ///
-        /// Creates an empty neighbour storage.
-        ///
+    /// Tracks the neighbours adjacent to each vertex by only using index data.
+    ///
+    /// The result preserves winding: the resulting array is wound around the
+    /// center vertex in the same way that the source triangles were wound.
+    #[derive(Default)]
+    pub struct AdjacencyBuilder {
+        pub(crate) state: HashMap<u32, RehexState>,
+        pub result: HashMap<u32, ArrayVec<u32, 6>>,
+    }
+
+    impl AdjacencyBuilder {
         pub fn new() -> Self {
             Self::default()
         }
 
-        ///
-        /// Optionally returns the neighbours for a vertex.
-        ///
-        /// In the case of an IcoSphere, this is of length `5` or `6`.
-        ///
-        pub fn neighbours(&self, id: u32) -> Option<&[u32]> {
-            self.map.get(&id).map(|x| &**x)
-        }
+        pub fn add_indices(&mut self, indices: &[u32]) {
+            for chunk in indices.chunks_exact(3) {
+                let &[a, b, c] = chunk else { unreachable!() };
 
-        ///
-        /// Creates the map given the indices of a shape.
-        ///
-        pub fn from_indices(indices: &[u32]) -> Self {
-            let mut this = Self::new();
-            this.add_triangle_indices(indices);
-            this
-        }
-
-        ///
-        /// Adds the indices to the map.
-        ///
-        pub fn add_triangle_indices(&mut self, triangles: &[u32]) {
-            assert_eq!(triangles.len() % 3, 0);
-
-            for triangle in triangles.chunks(3) {
-                self.add_triangle([triangle[0], triangle[1], triangle[2]]);
+                self.add_triangle(a, b, c);
+                self.add_triangle(c, a, b);
+                self.add_triangle(b, c, a);
             }
         }
 
-        ///
-        /// Adds a single subdivided triangle to the storage.
-        ///
-        fn add_triangle(&mut self, [a, b, c]: [u32; 3]) {
-            let mut add_triangle = |a, b, c| {
-                let vec = self.map.entry(a).or_insert_with(SmallVec::new);
-                if !vec.contains(&b) {
-                    vec.push(b);
-                }
-                if !vec.contains(&c) {
-                    vec.push(c);
-                }
-            };
+        pub fn finish(self) -> HashMap<u32, ArrayVec<u32, 6>> {
+            self.result
+        }
 
-            add_triangle(a, b, c);
-            add_triangle(b, c, a);
-            add_triangle(c, a, b);
+        fn add_triangle(&mut self, a: u32, b: u32, c: u32) {
+            let state = self.state.entry(a).or_insert(RehexState::Empty);
+            if let RehexState::Complete = state {
+                return;
+            }
+
+            let result = self.result.entry(a).or_insert_with(ArrayVec::new);
+
+            match state {
+                RehexState::Empty => {
+                    result.extend([b, c]);
+                    *state = RehexState::Clear;
+                }
+                RehexState::Clear => {
+                    if result[result.len() - 1] == b {
+                        if result[0] == c {
+                            *state = RehexState::Complete;
+                        } else {
+                            result.push(c);
+                            if result.len() == 6 {
+                                *state = RehexState::Complete;
+                            }
+                        }
+                    } else if result[0] == c {
+                        result.insert(0, b);
+                        if result.len() == 6 {
+                            *state = RehexState::Complete;
+                        }
+                    } else {
+                        *state = match result.len() {
+                            2 => RehexState::TwoTwo,
+                            3 => RehexState::ThreeTwo,
+                            4 => RehexState::Complete,
+                            _ => unreachable!(),
+                        };
+                        result.extend([b, c]);
+                    }
+                }
+                RehexState::TwoTwo => {
+                    if result[1] == b {
+                        if result[2] == c {
+                            *state = RehexState::Clear;
+                        } else {
+                            result.insert(2, c);
+                            *state = RehexState::ThreeTwo;
+                        }
+                    } else if result[0] == c {
+                        if result[3] == b {
+                            let temp = result[2];
+                            result.pop();
+                            result.pop();
+                            result.insert(0, temp);
+                            result.insert(1, b);
+                            *state = RehexState::Clear;
+                        } else {
+                            result.insert(0, b);
+                            *state = RehexState::ThreeTwo;
+                        }
+                    } else if result[2] == c {
+                        result.insert(0, b);
+                        let t2 = result.swap_remove(2);
+                        let t1 = result.swap_remove(1);
+                        result.push(t1);
+                        result.push(t2);
+                        *state = RehexState::ThreeTwo;
+                    } else {
+                        result.extend([b, c]);
+                        *state = RehexState::TwoTwoTwo;
+                    }
+                }
+                RehexState::ThreeTwo => {
+                    if result[2] == b {
+                        if result[3] == c {
+                            *state = RehexState::Clear;
+                        } else {
+                            result.insert(3, c);
+                            *state = RehexState::Complete;
+                        }
+                    } else {
+                        if result[4] == b {
+                            result.pop();
+                            let temp = result.pop().unwrap();
+                            result.insert(0, b);
+                            result.insert(0, temp);
+                            *state = RehexState::Clear;
+                        } else {
+                            result.insert(0, b);
+                            *state = RehexState::Complete;
+                        }
+                    }
+                }
+                RehexState::TwoTwoTwo => {
+                    if (result[1] != b || result[2] != c)
+                        && (result[3] != b || result[4] != c)
+                        && (result[5] != b || result[0] != c)
+                    {
+                        let t2 = result.swap_remove(3);
+                        let t1 = result.swap_remove(2);
+                        result.extend([t1, t2]);
+                    }
+                    *state = RehexState::Complete;
+                }
+                RehexState::Complete => unreachable!(),
+            }
         }
     }
 }
@@ -1764,11 +1845,12 @@ mod tests {
 
     #[cfg(feature = "adjacency")]
     mod adjacency {
-        use crate::{shapes::IcoSphere, AdjacentStore};
+        use crate::{shapes::IcoSphere, adjacency::AdjacencyBuilder};
+        use crate::adjacency::RehexState;
 
         #[test]
         fn creation() {
-            let sphere = IcoSphere::new(0, |_| ());
+            let sphere = IcoSphere::new(5, |_| ());
 
             let mut indices = Vec::new();
 
@@ -1776,47 +1858,12 @@ mod tests {
                 sphere.get_indices(i, &mut indices);
             }
 
-            let _ = AdjacentStore::from_indices(&indices);
-        }
-
-        #[test]
-        fn correct_indices() {
-            let sphere = IcoSphere::new(0, |_| ());
-
-            let mut indices = Vec::new();
-
-            for i in 0..20 {
-                sphere.get_indices(i, &mut indices);
-            }
-
-            let store = AdjacentStore::from_indices(&indices);
-
-            const REFERENCE_DATA: [[u32; 5]; 12] = [
-                [1, 2, 3, 4, 5],
-                [0, 2, 7, 6, 5],
-                [0, 1, 3, 8, 7],
-                [0, 4, 2, 9, 8],
-                [0, 5, 10, 9, 3],
-                [0, 1, 6, 10, 4],
-                [5, 1, 7, 11, 10],
-                [1, 2, 8, 11, 6],
-                [2, 3, 9, 11, 7],
-                [3, 4, 10, 11, 8],
-                [4, 5, 6, 11, 9],
-                [6, 7, 8, 9, 10],
-            ];
-
-            for i in 0..12 {
-                let expected = REFERENCE_DATA[i as usize];
-                let actual = store.neighbours(i).unwrap();
-                assert_eq!(actual.len(), 5);
-                let mut values = [0; 5];
-                for (x, i) in actual.iter().enumerate() {
-                    assert!(expected.contains(i));
-                    values[x] += 1;
-                }
-                assert_eq!(values, [1; 5]);
-            }
+            let mut builder = AdjacencyBuilder::new();
+            builder.add_indices(&indices);
+            builder
+                .state
+                .iter()
+                .for_each(|(_, &state)| assert_eq!(state, RehexState::Complete));
         }
     }
 }
