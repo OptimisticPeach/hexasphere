@@ -49,7 +49,7 @@ impl BaseShape for IcoSphereBase {
 impl EquilateralBaseShape for IcoSphereBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
-        &*consts::icosphere::TRIANGLE_NORMALS
+        &consts::icosphere::TRIANGLE_NORMALS
     }
 
     #[inline]
@@ -120,7 +120,7 @@ impl BaseShape for NormIcoSphereBase {
 impl EquilateralBaseShape for NormIcoSphereBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
-        &*consts::icosphere::TRIANGLE_NORMALS
+        &consts::icosphere::TRIANGLE_NORMALS
     }
 
     #[inline]
@@ -182,7 +182,7 @@ impl BaseShape for TetraSphereBase {
 impl EquilateralBaseShape for TetraSphereBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
-        &*consts::tetrasphere::TRIANGLE_NORMALS
+        &consts::tetrasphere::TRIANGLE_NORMALS
     }
 
     #[inline]
@@ -404,7 +404,7 @@ mod consts {
     }
     pub mod triangle {
         use crate::{Triangle, TriangleContents};
-        use const_soft_float::soft_f32::SoftF32;
+        use constgebra::const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
 
         pub(crate) static INITIAL_POINTS: [Vec3A; 3] = [
@@ -437,43 +437,8 @@ mod consts {
     }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
-        use const_soft_float::soft_f32::SoftF32;
+        use constgebra::{const_soft_float::soft_f32::SoftF32, CVector};
         use glam::Vec3A;
-        use once_cell::sync::Lazy;
-
-        pub(crate) static INITIAL_POINTS: [Vec3A; 4] = [
-            Vec3A::new(
-                SoftF32(8.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
-                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
-                0.0,
-            ),
-            Vec3A::new(
-                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
-                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
-                SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().to_f32(),
-            ),
-            Vec3A::new(
-                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
-                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
-                SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().neg().to_f32(),
-            ),
-            Vec3A::new(0.0, 1.0, 0.0),
-        ];
-
-        pub(crate) static MIN_NORMAL_DOT: f32 = SoftF32(7.0f32).sqrt().div(SoftF32(3.0)).to_f32();
-
-        pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 4]> = Lazy::new(|| {
-            #[rustfmt::skip]
-            fn normal(triangle: usize) -> Vec3A {
-                (
-                    INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
-                    INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
-                    INITIAL_POINTS[TRIANGLES[triangle].c as usize]
-                ) / 3.0
-            }
-
-            [normal(0), normal(1), normal(2), normal(3)]
-        });
 
         pub const TRIANGLES: [Triangle; 4] = [
             Triangle {
@@ -530,10 +495,95 @@ mod consts {
             },
         ];
         pub const EDGES: usize = 6;
+
+        // https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal
+        pub(super) const fn normal<const I: usize>(
+            triangles: &[Triangle],
+            initial_points: &[Vec3A],
+        ) -> Vec3A {
+            const fn f32_arr_to_f64<const N: usize>(arr: [f32; N]) -> [f64; N] {
+                let mut ret = [0.0_f64; N];
+                let mut i = 0;
+                while i < N {
+                    ret[i] = arr[i] as f64;
+                    i += 1;
+                }
+                ret
+            }
+            const fn f64_arr_to_f32<const N: usize>(arr: [f64; N]) -> [f32; N] {
+                let mut ret = [0.0_f32; N];
+                let mut i = 0;
+                while i < N {
+                    ret[i] = arr[i] as f32;
+                    i += 1;
+                }
+                ret
+            }
+
+            let triangle = &triangles[I];
+
+            let p1 = CVector::new_vector(f32_arr_to_f64(
+                initial_points[triangle.a as usize].to_array(),
+            ));
+            let p2 = CVector::new_vector(f32_arr_to_f64(
+                initial_points[triangle.b as usize].to_array(),
+            ));
+            let p3 = CVector::new_vector(f32_arr_to_f64(
+                initial_points[triangle.c as usize].to_array(),
+            ));
+
+            let u = f64_arr_to_f32(p2.sub(p1).finish_vector());
+            let v = f64_arr_to_f32(p3.sub(p1).finish_vector());
+
+            let result = [
+                SoftF32(u[1])
+                    .mul(SoftF32(v[2]))
+                    .sub(SoftF32(u[2]).mul(SoftF32(v[1])))
+                    .to_f32(),
+                SoftF32(u[2])
+                    .mul(SoftF32(v[0]))
+                    .sub(SoftF32(u[0]).mul(SoftF32(v[2])))
+                    .to_f32(),
+                SoftF32(u[0])
+                    .mul(SoftF32(v[1]))
+                    .sub(SoftF32(u[1]).mul(SoftF32(v[0])))
+                    .to_f32(),
+            ];
+
+            return Vec3A::from_array(result);
+        }
+
+        pub(crate) const INITIAL_POINTS: [Vec3A; 4] = [
+            Vec3A::new(
+                SoftF32(8.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
+                0.0,
+            ),
+            Vec3A::new(
+                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
+                SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().to_f32(),
+            ),
+            Vec3A::new(
+                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
+                SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().neg().to_f32(),
+            ),
+            Vec3A::new(0.0, 1.0, 0.0),
+        ];
+
+        pub(crate) const MIN_NORMAL_DOT: f32 = SoftF32(7.0f32).sqrt().div(SoftF32(3.0)).to_f32();
+
+        pub(crate) const TRIANGLE_NORMALS: [Vec3A; 4] = [
+            normal::<0>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<2>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<3>(&TRIANGLES, &INITIAL_POINTS),
+        ];
     }
     pub mod cube {
         use crate::{Triangle, TriangleContents};
-        use const_soft_float::soft_f32::SoftF32;
+        use constgebra::const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
 
         #[rustfmt::skip]
@@ -552,7 +602,7 @@ mod consts {
             ]
         };
 
-        pub const TRIANGLES: [Triangle; 12] = [
+        pub const TRIANGLES: &[Triangle; 12] = &[
             // Back
             Triangle {
                 a: 0,
@@ -721,9 +771,10 @@ mod consts {
     }
     pub mod icosphere {
         use crate::{Triangle, TriangleContents};
-        use const_soft_float::soft_f32::SoftF32;
+        use constgebra::const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
-        use once_cell::sync::Lazy;
+
+        use super::tetrasphere::normal;
 
         pub(crate) const INITIAL_POINTS: [Vec3A; 12] = [
             // North Pole
@@ -784,39 +835,28 @@ mod consts {
             Vec3A::NEG_Y,
         ];
 
-        pub(crate) static TRIANGLE_NORMALS: Lazy<[Vec3A; 20]> = Lazy::new(|| {
-            #[rustfmt::skip]
-            fn normal(triangle: usize) -> Vec3A {
-                (
-                    INITIAL_POINTS[TRIANGLES[triangle].a as usize] +
-                    INITIAL_POINTS[TRIANGLES[triangle].b as usize] +
-                    INITIAL_POINTS[TRIANGLES[triangle].c as usize]
-                ) / 3.0
-            }
-
-            [
-                normal(0),
-                normal(1),
-                normal(2),
-                normal(3),
-                normal(4),
-                normal(5),
-                normal(6),
-                normal(7),
-                normal(8),
-                normal(9),
-                normal(10),
-                normal(11),
-                normal(12),
-                normal(13),
-                normal(14),
-                normal(15),
-                normal(16),
-                normal(17),
-                normal(18),
-                normal(19),
-            ]
-        });
+        pub(crate) static TRIANGLE_NORMALS: [Vec3A; 20] = [
+            normal::<0>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<2>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<3>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<4>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<5>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<6>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<7>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<8>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<9>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+            normal::<1>(&TRIANGLES, &INITIAL_POINTS),
+        ];
 
         pub(crate) static MIN_NORMAL_DOT: f32 = ((SoftF32(1.0f32).div(SoftF32(30.0)))
             .mul(SoftF32(25.0).add(SoftF32(5.0_f32)).sqrt()))
