@@ -437,7 +437,8 @@ mod consts {
     }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
-        use constgebra::{const_soft_float::soft_f32::SoftF32, CVector};
+        use constgebra::{const_soft_float::soft_f32::SoftF32, CVector, Operation};
+        use constgebra::const_soft_float::soft_f64::SoftF64;
         use glam::Vec3A;
 
         pub const TRIANGLES: [Triangle; 4] = [
@@ -496,7 +497,6 @@ mod consts {
         ];
         pub const EDGES: usize = 6;
 
-        // https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal
         pub(super) const fn normal<const I: usize>(
             triangles: &[Triangle],
             initial_points: &[Vec3A],
@@ -532,25 +532,21 @@ mod consts {
                 initial_points[triangle.c as usize].to_array(),
             ));
 
-            let u = f64_arr_to_f32(p2.sub(p1).finish_vector());
-            let v = f64_arr_to_f32(p3.sub(p1).finish_vector());
+            let normal = p1.add(p2).add(p3);
+            let len = {
+                let [x, y, z] = normal.finish_vector();
+                let x = SoftF64(x);
+                let y = SoftF64(y);
+                let z = SoftF64(z);
 
-            let result = [
-                SoftF32(u[1])
-                    .mul(SoftF32(v[2]))
-                    .sub(SoftF32(u[2]).mul(SoftF32(v[1])))
-                    .to_f32(),
-                SoftF32(u[2])
-                    .mul(SoftF32(v[0]))
-                    .sub(SoftF32(u[0]).mul(SoftF32(v[2])))
-                    .to_f32(),
-                SoftF32(u[0])
-                    .mul(SoftF32(v[1]))
-                    .sub(SoftF32(u[1]).mul(SoftF32(v[0])))
-                    .to_f32(),
-            ];
+                x.mul(x)
+                    .add(y.mul(y))
+                    .add(z.mul(z))
+                    .sqrt()
+            };
+            let normal = normal.apply_each(Operation::Div(len.0));
 
-            return Vec3A::from_array(result);
+            return Vec3A::from_array(f64_arr_to_f32(normal.finish_vector()));
         }
 
         pub(crate) const INITIAL_POINTS: [Vec3A; 4] = [
