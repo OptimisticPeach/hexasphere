@@ -212,6 +212,7 @@ pub trait BaseShape {
 ///
 /// This is only used in the cases of spherical shapes.
 ///
+#[cfg(feature = "shape-extras")]
 pub trait EquilateralBaseShape: BaseShape {
     ///
     /// Normals for each of the triangles provided by
@@ -1245,6 +1246,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 }
 
+#[cfg(feature = "shape-extras")]
 impl<T, S: BaseShape + EquilateralBaseShape> Subdivided<T, S> {
     ///
     /// Closest "main" triangle.

@@ -16,6 +16,7 @@ categories = ["algorithms", "data-structures", "graphics", "mathematics", "rende
 
 [features]
 adjacency = ["arrayvec"]
+shape-extras = []
 
 [dependencies]
 constgebra = "0.1.3"

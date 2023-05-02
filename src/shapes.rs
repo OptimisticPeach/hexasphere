@@ -1,4 +1,6 @@
-use super::{interpolation, BaseShape, EquilateralBaseShape, Subdivided, Triangle};
+use super::{interpolation, BaseShape, Subdivided, Triangle};
+#[cfg(feature = "shape-extras")]
+use super::EquilateralBaseShape;
 use glam::Vec3A;
 
 ///
@@ -46,6 +48,7 @@ impl BaseShape for IcoSphereBase {
     }
 }
 
+#[cfg(feature = "shape-extras")]
 impl EquilateralBaseShape for IcoSphereBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
@@ -117,6 +120,7 @@ impl BaseShape for NormIcoSphereBase {
     }
 }
 
+#[cfg(feature = "shape-extras")]
 impl EquilateralBaseShape for NormIcoSphereBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
@@ -179,6 +183,7 @@ impl BaseShape for TetraSphereBase {
     }
 }
 
+#[cfg(feature = "shape-extras")]
 impl EquilateralBaseShape for TetraSphereBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
@@ -241,6 +246,7 @@ impl BaseShape for TriangleBase {
     }
 }
 
+#[cfg(feature = "shape-extras")]
 impl EquilateralBaseShape for TriangleBase {
     #[inline]
     fn triangle_normals() -> &'static [Vec3A] {
@@ -417,6 +423,7 @@ mod consts {
             Vec3A::new(0.0, 0.0, 1.0),
         ];
 
+        #[cfg(feature = "shape-extras")]
         pub(crate) const TRIANGLE_NORMAL: Vec3A = Vec3A::Y;
 
         pub const TRIANGLE: Triangle = Triangle {
@@ -437,8 +444,9 @@ mod consts {
     }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
-        use constgebra::{const_soft_float::soft_f32::SoftF32, CVector, Operation};
-        use constgebra::const_soft_float::soft_f64::SoftF64;
+        use constgebra::{const_soft_float::soft_f32::SoftF32};
+        #[cfg(feature = "shape-extras")]
+        use constgebra::{const_soft_float::soft_f64::SoftF64, CVector, Operation};
         use glam::Vec3A;
 
         pub const TRIANGLES: [Triangle; 4] = [
@@ -497,6 +505,7 @@ mod consts {
         ];
         pub const EDGES: usize = 6;
 
+        #[cfg(feature = "shape-extras")]
         pub(super) const fn normal<const I: usize>(
             triangles: &[Triangle],
             initial_points: &[Vec3A],
@@ -568,8 +577,10 @@ mod consts {
             Vec3A::new(0.0, 1.0, 0.0),
         ];
 
+        #[cfg(feature = "shape-extras")]
         pub(crate) const MIN_NORMAL_DOT: f32 = SoftF32(7.0f32).sqrt().div(SoftF32(3.0)).to_f32();
 
+        #[cfg(feature = "shape-extras")]
         pub(crate) const TRIANGLE_NORMALS: [Vec3A; 4] = [
             normal::<0>(&TRIANGLES, &INITIAL_POINTS),
             normal::<1>(&TRIANGLES, &INITIAL_POINTS),
@@ -767,9 +778,11 @@ mod consts {
     }
     pub mod icosphere {
         use crate::{Triangle, TriangleContents};
+        #[cfg(feature = "shape-extras")]
         use constgebra::const_soft_float::soft_f32::SoftF32;
         use glam::Vec3A;
 
+        #[cfg(feature = "shape-extras")]
         use super::tetrasphere::normal;
 
         pub(crate) const INITIAL_POINTS: [Vec3A; 12] = [
@@ -831,6 +844,7 @@ mod consts {
             Vec3A::NEG_Y,
         ];
 
+        #[cfg(feature = "shape-extras")]
         pub(crate) static TRIANGLE_NORMALS: [Vec3A; 20] = [
             normal::<0>(&TRIANGLES, &INITIAL_POINTS),
             normal::<1>(&TRIANGLES, &INITIAL_POINTS),
@@ -854,6 +868,7 @@ mod consts {
             normal::<1>(&TRIANGLES, &INITIAL_POINTS),
         ];
 
+        #[cfg(feature = "shape-extras")]
         pub(crate) static MIN_NORMAL_DOT: f32 = ((SoftF32(1.0f32).div(SoftF32(30.0)))
             .mul(SoftF32(25.0).add(SoftF32(5.0_f32)).sqrt()))
         .sqrt()
