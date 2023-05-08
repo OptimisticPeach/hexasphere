@@ -20,6 +20,6 @@ shape-extras = []
 
 [dependencies]
 constgebra = "0.1.3"
-glam = "0.23"
+glam = "0.24"
 
 arrayvec = { version = "0.7.2", optional = true }
