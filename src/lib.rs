@@ -1439,8 +1439,7 @@ fn add_line_indices_triangular(
 /// Implements neighbour tracking.
 ///
 mod adjacency {
-    use arrayvec::ArrayVec;
-    use std::collections::HashMap;
+    use tinyvec::ArrayVec;
 
     #[derive(Copy, Clone, Eq, PartialEq, Debug)]
     pub(crate) enum RehexState {
@@ -1456,15 +1455,19 @@ mod adjacency {
     ///
     /// The result preserves winding: the resulting array is wound around the
     /// center vertex in the same way that the source triangles were wound.
-    #[derive(Default)]
     pub struct AdjacencyBuilder {
-        pub(crate) state: HashMap<u32, RehexState>,
-        pub result: HashMap<u32, ArrayVec<u32, 6>>,
+        pub(crate) state: Vec<RehexState>,
+        pub result: Vec<ArrayVec<[usize; 6]>>,
     }
 
     impl AdjacencyBuilder {
-        pub fn new() -> Self {
-            Self::default()
+        pub fn new(points_len: usize) -> Self {
+            let state = std::iter::repeat(RehexState::Empty).take(points_len).collect::<Vec<_>>();
+            let result = std::iter::repeat(ArrayVec::new()).take(points_len).collect::<Vec<_>>();
+            Self {
+                state,
+                result
+            }
         }
 
         pub fn add_indices(&mut self, indices: &[u32]) {
@@ -1477,17 +1480,18 @@ mod adjacency {
             }
         }
 
-        pub fn finish(self) -> HashMap<u32, ArrayVec<u32, 6>> {
+        pub fn finish(self) -> Vec<ArrayVec<[usize; 6]>> {
             self.result
         }
 
         fn add_triangle(&mut self, a: u32, b: u32, c: u32) {
-            let state = self.state.entry(a).or_insert(RehexState::Empty);
+            let (a, b, c) = (a as usize, b as usize, c as usize);
+            let state = &mut self.state[a];
             if let RehexState::Complete = state {
                 return;
             }
 
-            let result = self.result.entry(a).or_insert_with(ArrayVec::new);
+            let result = &mut self.result[a];
 
             match state {
                 RehexState::Empty => {
@@ -1860,12 +1864,12 @@ mod tests {
                 sphere.get_indices(i, &mut indices);
             }
 
-            let mut builder = AdjacencyBuilder::new();
+            let mut builder = AdjacencyBuilder::new(sphere.raw_points().len());
             builder.add_indices(&indices);
             builder
                 .state
                 .iter()
-                .for_each(|(_, &state)| assert_eq!(state, RehexState::Complete));
+                .for_each(|&state| assert_eq!(state, RehexState::Complete));
         }
     }
 }
