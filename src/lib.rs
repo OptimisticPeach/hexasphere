@@ -323,10 +323,10 @@ impl TriangleContents {
     /// Creates a `One` by interpolating two values.
     ///
     fn one(
-        points: &mut Vec<Vec3A>,
+        points: &mut usize,
     ) -> Self {
-        let index = points.len() as u32;
-        points.push(Vec3A::ZERO);
+        let index = *points as u32;
+        *points += 1;
         TriangleContents::One(index)
     }
 
@@ -355,18 +355,18 @@ impl TriangleContents {
     ///
     fn three(
         &mut self,
-        points: &mut Vec<Vec3A>,
+        points: &mut usize,
     ) {
         use TriangleContents::*;
 
         match self {
             &mut One(x) => {
-                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO]);
+                *points += 2;
 
-                    *self = Three {
+                *self = Three {
                     a: x,
-                    b: points.len() as u32 - 2,
-                    c: points.len() as u32 - 1,
+                    b: *points as u32 - 2,
+                    c: *points as u32 - 1,
                 };
             }
             _ => panic!("Self is {:?} while it should be One", self),
@@ -409,7 +409,7 @@ impl TriangleContents {
     ///
     fn six(
         &mut self,
-        points: &mut Vec<Vec3A>,
+        points: &mut usize,
     ) {
         use TriangleContents::*;
 
@@ -419,15 +419,15 @@ impl TriangleContents {
                 b: b_index,
                 c: c_index,
             } => {
-                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
+                *points += 3;
 
                 *self = Six {
                     a: a_index,
                     b: b_index,
                     c: c_index,
-                    ab: points.len() as u32 - 3,
-                    bc: points.len() as u32 - 2,
-                    ca: points.len() as u32 - 1,
+                    ab: *points as u32 - 3,
+                    bc: *points as u32 - 2,
+                    ca: *points as u32 - 1,
                 };
             }
             _ => panic!("Found {:?} whereas a Three was expected", self),
@@ -488,7 +488,7 @@ impl TriangleContents {
     ///
     pub fn subdivide(
         &mut self,
-        points: &mut Vec<Vec3A>,
+        points: &mut usize,
         shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
@@ -521,8 +521,8 @@ impl TriangleContents {
                 my_side_length,
                 ..
             } => {
-                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
-                let len = points.len() as u32;
+                *points += 3;
+                let len = *points as u32;
                 sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
                 *my_side_length += 1;
 
@@ -897,12 +897,12 @@ impl Triangle {
     fn subdivide_edges<'a>(
         &self,
         edges: &mut [Edge],
-        points: &mut Vec<Vec3A>,
+        points: &mut usize,
     ) {
         let mut divide = |edge_idx: usize| {
             if !edges[edge_idx].done {
-                edges[edge_idx].points.push(points.len() as u32);
-                points.push(Vec3A::ZERO);
+                edges[edge_idx].points.push(*points as u32);
+                *points += 1;
 
                 edges[edge_idx].done = true;
             }
@@ -952,7 +952,7 @@ impl Triangle {
     fn subdivide(
         &mut self,
         edges: &mut [Edge],
-        points: &mut Vec<Vec3A>,
+        points: &mut usize,
         shape: &impl BaseShape,
     ) {
         let side_length = edges[self.ab_edge].points.len() + 1;
@@ -1109,9 +1109,11 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             shape,
         };
 
+        let mut new_points = this.points.len();
+
         for _ in 0..subdivisions {
             for triangle in &mut *this.triangles {
-                triangle.subdivide_edges(&mut *this.shared_edges, &mut this.points);
+                triangle.subdivide_edges(&mut *this.shared_edges, &mut new_points);
             }
             for edge in &mut *this.shared_edges {
                 edge.done = false;
@@ -1122,11 +1124,14 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             for _ in 0..subdivisions {
                 triangle.subdivide(
                     &mut *this.shared_edges,
-                    &mut this.points,
+                    &mut new_points,
                     &this.shape,
                 );
             }
         }
+
+        let diff = new_points - this.points.len();
+        this.points.extend(std::iter::repeat(Vec3A::ZERO).take(diff));
 
         for triangle in &mut *this.triangles {
             triangle.calculate(
@@ -1151,17 +1156,23 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             *done = false;
         }
 
+        let mut new_points = self.points.len();
+
         for triangle in &mut *self.triangles {
             triangle.subdivide(
                 &mut *self.shared_edges,
-                &mut self.points,
+                &mut new_points,
                 &self.shape,
             );
             triangle.subdivide_edges(
                 &mut self.shared_edges,
-                &mut self.points,
+                &mut new_points,
             );
         }
+
+        let diff = new_points - self.points.len();
+        self.points.extend(std::iter::repeat(Vec3A::ZERO).take(diff));
+
         for triangle in &mut *self.triangles {
             triangle.calculate(
                 &mut *self.shared_edges,
