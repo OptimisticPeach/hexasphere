@@ -236,6 +236,7 @@ pub trait EquilateralBaseShape: BaseShape {
 ///
 /// The edge between two main triangles.
 ///
+#[derive(Debug)]
 struct Edge {
     ///
     /// Indices of the points between the endpoints.
@@ -322,23 +323,31 @@ impl TriangleContents {
     /// Creates a `One` by interpolating two values.
     ///
     fn one(
+        points: &mut Vec<Vec3A>,
+    ) -> Self {
+        let index = points.len() as u32;
+        points.push(Vec3A::ZERO);
+        TriangleContents::One(index)
+    }
+
+    fn calculate_one(
+        &self,
         ab: Slice<u32>,
         bc: Slice<u32>,
-        points: &mut Vec<Vec3A>,
-        calculate: bool,
+        points: &mut [Vec3A],
         shape: &impl BaseShape,
-    ) -> Self {
+    ) {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), 2);
-        let p1 = points[ab[0] as usize];
-        let p2 = points[bc[1] as usize];
-        let index = points.len() as u32;
-        if calculate {
-            points.push(shape.interpolate_half(p1, p2));
-        } else {
-            points.push(Vec3A::ZERO);
+        match self {
+            TriangleContents::One(idx) => {
+                let p1 = points[ab[0] as usize];
+                let p2 = points[bc[1] as usize];
+
+                points[*idx as usize] = shape.interpolate_half(p1, p2);
+            },
+            _ => panic!("Did not find One variant."),
         }
-        TriangleContents::One(index)
     }
 
     ///
@@ -346,37 +355,15 @@ impl TriangleContents {
     ///
     fn three(
         &mut self,
-        ab: Slice<u32>,
-        bc: Slice<u32>,
-        ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
-        calculate: bool,
-        shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
 
-        assert_eq!(ab.len(), bc.len());
-        assert_eq!(ab.len(), ca.len());
-        assert_eq!(ab.len(), 3);
-
         match self {
             &mut One(x) => {
-                let ab = points[ab[1] as usize];
-                let bc = points[bc[1] as usize];
-                let ca = points[ca[1] as usize];
+                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO]);
 
-                if calculate {
-                    let a = shape.interpolate_half(ab, ca);
-                    let b = shape.interpolate_half(bc, ab);
-                    let c = shape.interpolate_half(ca, bc);
-
-                    points.extend_from_slice(&[b, c]);
-                    points[x as usize] = a;
-                } else {
-                    points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO])
-                }
-
-                *self = Three {
+                    *self = Three {
                     a: x,
                     b: points.len() as u32 - 2,
                     c: points.len() as u32 - 1,
@@ -386,23 +373,45 @@ impl TriangleContents {
         }
     }
 
+    fn calculate_three(
+        &self,
+        ab: Slice<u32>,
+        bc: Slice<u32>,
+        ca: Slice<u32>,
+        points: &mut [Vec3A],
+        shape: &impl BaseShape,
+    ) {
+        assert_eq!(ab.len(), bc.len());
+        assert_eq!(ab.len(), ca.len());
+        assert_eq!(ab.len(), 3);
+
+        match self {
+            &TriangleContents::Three { a, b, c } => {
+                let ab = points[ab[1] as usize];
+                let bc = points[bc[1] as usize];
+                let ca = points[ca[1] as usize];
+
+                let a_val = shape.interpolate_half(ab, ca);
+                let b_val = shape.interpolate_half(bc, ab);
+                let c_val = shape.interpolate_half(ca, bc);
+
+                points[a as usize] = a_val;
+                points[b as usize] = b_val;
+                points[c as usize] = c_val;
+
+            },
+            _ => panic!("Did not find Three variant."),
+        }
+    }
+
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
     fn six(
         &mut self,
-        ab: Slice<u32>,
-        bc: Slice<u32>,
-        ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
-        calculate: bool,
-        shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
-
-        assert_eq!(ab.len(), bc.len());
-        assert_eq!(ab.len(), ca.len());
-        assert_eq!(ab.len(), 4);
 
         match self {
             &mut Three {
@@ -410,29 +419,7 @@ impl TriangleContents {
                 b: b_index,
                 c: c_index,
             } => {
-                let aba = points[ab[1] as usize];
-                let abb = points[ab[2] as usize];
-                let bcb = points[bc[1] as usize];
-                let bcc = points[bc[2] as usize];
-                let cac = points[ca[1] as usize];
-                let caa = points[ca[2] as usize];
-
-                if calculate {
-                    let a = shape.interpolate_half(aba, caa);
-                    let b = shape.interpolate_half(abb, bcb);
-                    let c = shape.interpolate_half(bcc, cac);
-
-                    let ab = shape.interpolate_half(a, b);
-                    let bc = shape.interpolate_half(b, c);
-                    let ca = shape.interpolate_half(c, a);
-
-                    points[a_index as usize] = a;
-                    points[b_index as usize] = b;
-                    points[c_index as usize] = c;
-                    points.extend_from_slice(&[ab, bc, ca]);
-                } else {
-                    points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO])
-                }
+                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
 
                 *self = Six {
                     a: a_index,
@@ -447,26 +434,69 @@ impl TriangleContents {
         }
     }
 
+    fn calculate_six(
+        &self,
+        ab: Slice<u32>,
+        bc: Slice<u32>,
+        ca: Slice<u32>,
+        points: &mut [Vec3A],
+        shape: &impl BaseShape,
+    ) {
+        assert_eq!(ab.len(), bc.len());
+        assert_eq!(ab.len(), ca.len());
+        assert_eq!(ab.len(), 4);
+
+        use TriangleContents::*;
+
+        match self {
+            &Six {
+                a: a_index,
+                b: b_index,
+                c: c_index,
+                ab: ab_index,
+                bc: bc_index,
+                ca: ca_index,
+            } => {
+                let aba = points[ab[1] as usize];
+                let abb = points[ab[2] as usize];
+                let bcb = points[bc[1] as usize];
+                let bcc = points[bc[2] as usize];
+                let cac = points[ca[1] as usize];
+                let caa = points[ca[2] as usize];
+
+                let a = shape.interpolate_half(aba, caa);
+                let b = shape.interpolate_half(abb, bcb);
+                let c = shape.interpolate_half(bcc, cac);
+
+                let ab = shape.interpolate_half(a, b);
+                let bc = shape.interpolate_half(b, c);
+                let ca = shape.interpolate_half(c, a);
+
+                points[a_index as usize] = a;
+                points[b_index as usize] = b;
+                points[c_index as usize] = c;
+                points[ab_index as usize] = ab;
+                points[bc_index as usize] = bc;
+                points[ca_index as usize] = ca;
+            }
+            _ => panic!("Found {:?} whereas a Three was expected", self),
+        }
+    }
+
     ///
     /// Subdivides this given the surrounding points.
     ///
     pub fn subdivide(
         &mut self,
-        ab: Slice<u32>,
-        bc: Slice<u32>,
-        ca: Slice<u32>,
         points: &mut Vec<Vec3A>,
-        calculate: bool,
         shape: &impl BaseShape,
     ) {
         use TriangleContents::*;
-        assert_eq!(ab.len(), bc.len());
-        assert_eq!(ab.len(), ca.len());
-        assert!(ab.len() >= 2);
+
         match self {
-            None => *self = Self::one(ab, bc, points, calculate, shape),
-            One(_) => self.three(ab, bc, ca, points, calculate, shape),
-            Three { .. } => self.six(ab, bc, ca, points, calculate, shape),
+            None => *self = Self::one(points),
+            One(_) => self.three(points),
+            Three { .. } => self.six(points),
             &mut Six {
                 a,
                 b,
@@ -483,8 +513,46 @@ impl TriangleContents {
                     my_side_length: 1,
                     contents: Box::new(Self::none()),
                 };
-                self.subdivide(ab, bc, ca, points, calculate, shape);
+                self.subdivide(points, shape);
             }
+            More {
+                sides,
+                contents,
+                my_side_length,
+                ..
+            } => {
+                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
+                let len = points.len() as u32;
+                sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
+                *my_side_length += 1;
+
+                contents.subdivide(
+                    points,
+                    shape,
+                );
+            }
+        }
+    }
+
+    pub fn calculate(
+        &mut self,
+        ab: Slice<u32>,
+        bc: Slice<u32>,
+        ca: Slice<u32>,
+        points: &mut [Vec3A],
+        shape: &impl BaseShape
+    ) {
+        assert_eq!(ab.len(), bc.len());
+        assert_eq!(ab.len(), ca.len());
+        assert!(ab.len() >= 2);
+
+        use TriangleContents::*;
+
+        match self {
+            None => panic!(),
+            One(_) => self.calculate_one(ab, bc, points, shape),
+            Three { .. } => self.calculate_three(ab, bc, ca, points, shape),
+            Six { .. } => self.calculate_six(ab, bc, ca, points, shape),
             &mut More {
                 a: a_idx,
                 b: b_idx,
@@ -493,10 +561,6 @@ impl TriangleContents {
                 ref mut contents,
                 ref mut my_side_length,
             } => {
-                points.extend_from_slice(&[Vec3A::ZERO, Vec3A::ZERO, Vec3A::ZERO]);
-                let len = points.len() as u32;
-                sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
-                *my_side_length += 1;
                 let side_length = *my_side_length as usize;
 
                 let outer_len = ab.len();
@@ -508,43 +572,38 @@ impl TriangleContents {
                 let cac = points[ca[1] as usize];
                 let caa = points[ca[outer_len - 2] as usize];
 
-                if calculate {
-                    points[a_idx as usize] = shape.interpolate_half(aba, caa);
-                    points[b_idx as usize] = shape.interpolate_half(abb, bcb);
-                    points[c_idx as usize] = shape.interpolate_half(bcc, cac);
-                }
+                points[a_idx as usize] = shape.interpolate_half(aba, caa);
+                points[b_idx as usize] = shape.interpolate_half(abb, bcb);
+                points[c_idx as usize] = shape.interpolate_half(bcc, cac);
 
                 let ab = &sides[0..side_length];
                 let bc = &sides[side_length..side_length * 2];
                 let ca = &sides[side_length * 2..];
 
-                if calculate {
-                    shape.interpolate_multiple(
-                        points[a_idx as usize],
-                        points[b_idx as usize],
-                        ab,
-                        points,
-                    );
-                    shape.interpolate_multiple(
-                        points[b_idx as usize],
-                        points[c_idx as usize],
-                        bc,
-                        points,
-                    );
-                    shape.interpolate_multiple(
-                        points[c_idx as usize],
-                        points[a_idx as usize],
-                        ca,
-                        points,
-                    );
-                }
+                shape.interpolate_multiple(
+                    points[a_idx as usize],
+                    points[b_idx as usize],
+                    ab,
+                    points,
+                );
+                shape.interpolate_multiple(
+                    points[b_idx as usize],
+                    points[c_idx as usize],
+                    bc,
+                    points,
+                );
+                shape.interpolate_multiple(
+                    points[c_idx as usize],
+                    points[a_idx as usize],
+                    ca,
+                    points,
+                );
 
-                contents.subdivide(
+                contents.calculate(
                     Forward(ab),
                     Forward(bc),
                     Forward(ca),
                     points,
-                    calculate,
                     shape,
                 );
             }
@@ -836,25 +895,38 @@ impl Triangle {
     /// be read in the `*_forward` values.
     ///
     fn subdivide_edges<'a>(
-        &'a mut self,
+        &self,
         edges: &mut [Edge],
         points: &mut Vec<Vec3A>,
-        calculate: bool,
-        shape: &impl BaseShape,
-    ) -> usize {
-        let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
+    ) {
+        let mut divide = |edge_idx: usize| {
             if !edges[edge_idx].done {
                 edges[edge_idx].points.push(points.len() as u32);
                 points.push(Vec3A::ZERO);
 
-                if calculate {
-                    shape.interpolate_multiple(
-                        points[p1 as usize],
-                        points[p2 as usize],
-                        &edges[edge_idx].points,
-                        points,
-                    );
-                }
+                edges[edge_idx].done = true;
+            }
+        };
+
+        divide(self.ab_edge);
+        divide(self.bc_edge);
+        divide(self.ca_edge);
+    }
+
+    fn calculate_edges(
+        &mut self,
+        edges: &mut [Edge],
+        points: &mut [Vec3A],
+        shape: &impl BaseShape,
+    ) -> usize {
+        let mut divide = |p1: u32, p2: u32, edge_idx: usize, forward: &mut bool| {
+            if !edges[edge_idx].done {
+                shape.interpolate_multiple(
+                    points[p1 as usize],
+                    points[p2 as usize],
+                    &edges[edge_idx].points,
+                    points,
+                );
 
                 edges[edge_idx].done = true;
                 *forward = true;
@@ -881,10 +953,23 @@ impl Triangle {
         &mut self,
         edges: &mut [Edge],
         points: &mut Vec<Vec3A>,
-        calculate: bool,
         shape: &impl BaseShape,
     ) {
-        let side_length = self.subdivide_edges(edges, points, calculate, shape) + 1;
+        let side_length = edges[self.ab_edge].points.len() + 1;
+
+        if side_length > 2 {
+            self.contents
+                .subdivide(points, shape);
+        }
+    }
+
+    fn calculate(
+        &mut self,
+        edges: &mut [Edge],
+        points: &mut [Vec3A],
+        shape: &impl BaseShape,
+    ) {
+        let side_length = self.calculate_edges(edges, points, shape) + 1;
 
         if side_length > 2 {
             let ab = if self.ab_forward {
@@ -903,7 +988,7 @@ impl Triangle {
                 Backward(&edges[self.ca_edge].points)
             };
             self.contents
-                .subdivide(ab, bc, ca, points, calculate, shape);
+                .calculate(ab, bc, ca, points, shape);
         }
     }
 
@@ -1024,16 +1109,31 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             shape,
         };
 
-        match subdivisions {
-            0 => {}
-            1 => this.subdivide(true),
-            x => {
-                for _ in 0..x - 1 {
-                    this.subdivide(false);
-                }
-
-                this.subdivide(true);
+        for _ in 0..subdivisions {
+            for triangle in &mut *this.triangles {
+                triangle.subdivide_edges(&mut *this.shared_edges, &mut this.points);
             }
+            for edge in &mut *this.shared_edges {
+                edge.done = false;
+            }
+        }
+
+        for triangle in &mut *this.triangles {
+            for _ in 0..subdivisions {
+                triangle.subdivide(
+                    &mut *this.shared_edges,
+                    &mut this.points,
+                    &this.shape,
+                );
+            }
+        }
+
+        for triangle in &mut *this.triangles {
+            triangle.calculate(
+                &mut *this.shared_edges,
+                &mut this.points,
+                &this.shape,
+            );
         }
 
         this.data = this.points.iter().copied().map(generator).collect();
@@ -1046,7 +1146,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// to recalculate vertices (To not calculate vertices between many
     /// subdivisions).
     ///
-    pub fn subdivide(&mut self, calculate: bool) {
+    pub fn subdivide(&mut self) {
         for Edge { done, .. } in &mut *self.shared_edges {
             *done = false;
         }
@@ -1055,7 +1155,17 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             triangle.subdivide(
                 &mut *self.shared_edges,
                 &mut self.points,
-                calculate,
+                &self.shape,
+            );
+            triangle.subdivide_edges(
+                &mut self.shared_edges,
+                &mut self.points,
+            );
+        }
+        for triangle in &mut *self.triangles {
+            triangle.calculate(
+                &mut *self.shared_edges,
+                &mut self.points,
                 &self.shape,
             );
         }
