@@ -1,6 +1,6 @@
-use super::{interpolation, BaseShape, Subdivided, Triangle};
 #[cfg(feature = "shape-extras")]
 use super::EquilateralBaseShape;
+use super::{interpolation, BaseShape, Subdivided, Triangle};
 use glam::Vec3A;
 
 ///
@@ -444,7 +444,7 @@ mod consts {
     }
     pub mod tetrasphere {
         use crate::{Triangle, TriangleContents};
-        use constgebra::{const_soft_float::soft_f32::SoftF32};
+        use constgebra::const_soft_float::soft_f32::SoftF32;
         #[cfg(feature = "shape-extras")]
         use constgebra::{const_soft_float::soft_f64::SoftF64, CVector, Operation};
         use glam::Vec3A;
@@ -548,10 +548,7 @@ mod consts {
                 let y = SoftF64(y);
                 let z = SoftF64(z);
 
-                x.mul(x)
-                    .add(y.mul(y))
-                    .add(z.mul(z))
-                    .sqrt()
+                x.mul(x).add(y.mul(y)).add(z.mul(z)).sqrt()
             };
             let normal = normal.apply_each(Operation::Div(len.0));
 

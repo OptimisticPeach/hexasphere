@@ -258,6 +258,15 @@ impl Default for Edge {
     }
 }
 
+impl Edge {
+    pub fn subdivide_n_times(&mut self, n: usize, points: &mut usize) {
+        for _ in 0..n {
+            self.points.push(*points as _);
+            *points += 1;
+        }
+    }
+}
+
 ///
 /// Contents of one of the main triangular faces.
 ///
@@ -322,9 +331,7 @@ impl TriangleContents {
     ///
     /// Creates a `One` by interpolating two values.
     ///
-    fn one(
-        points: &mut usize,
-    ) -> Self {
+    fn one(points: &mut usize) -> Self {
         let index = *points as u32;
         *points += 1;
         TriangleContents::One(index)
@@ -345,7 +352,7 @@ impl TriangleContents {
                 let p2 = points[bc[1] as usize];
 
                 points[*idx as usize] = shape.interpolate_half(p1, p2);
-            },
+            }
             _ => panic!("Did not find One variant."),
         }
     }
@@ -353,10 +360,7 @@ impl TriangleContents {
     ///
     /// Creates a `Three` variant from a `One` variant.
     ///
-    fn three(
-        &mut self,
-        points: &mut usize,
-    ) {
+    fn three(&mut self, points: &mut usize) {
         use TriangleContents::*;
 
         match self {
@@ -398,8 +402,7 @@ impl TriangleContents {
                 points[a as usize] = a_val;
                 points[b as usize] = b_val;
                 points[c as usize] = c_val;
-
-            },
+            }
             _ => panic!("Did not find Three variant."),
         }
     }
@@ -407,10 +410,7 @@ impl TriangleContents {
     ///
     /// Creates a `Six` variant from a `Three` variant.
     ///
-    fn six(
-        &mut self,
-        points: &mut usize,
-    ) {
+    fn six(&mut self, points: &mut usize) {
         use TriangleContents::*;
 
         match self {
@@ -486,11 +486,7 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(
-        &mut self,
-        points: &mut usize,
-        shape: &impl BaseShape,
-    ) {
+    pub fn subdivide(&mut self, points: &mut usize) {
         use TriangleContents::*;
 
         match self {
@@ -513,7 +509,7 @@ impl TriangleContents {
                     my_side_length: 1,
                     contents: Box::new(Self::none()),
                 };
-                self.subdivide(points, shape);
+                self.subdivide(points);
             }
             More {
                 sides,
@@ -526,10 +522,7 @@ impl TriangleContents {
                 sides.extend_from_slice(&[len - 3, len - 2, len - 1]);
                 *my_side_length += 1;
 
-                contents.subdivide(
-                    points,
-                    shape,
-                );
+                contents.subdivide(points);
             }
         }
     }
@@ -540,7 +533,7 @@ impl TriangleContents {
         bc: Slice<u32>,
         ca: Slice<u32>,
         points: &mut [Vec3A],
-        shape: &impl BaseShape
+        shape: &impl BaseShape,
     ) {
         assert_eq!(ab.len(), bc.len());
         assert_eq!(ab.len(), ca.len());
@@ -599,13 +592,7 @@ impl TriangleContents {
                     points,
                 );
 
-                contents.calculate(
-                    Forward(ab),
-                    Forward(bc),
-                    Forward(ca),
-                    points,
-                    shape,
-                );
+                contents.calculate(Forward(ab), Forward(bc), Forward(ca), points, shape);
             }
         }
     }
@@ -894,11 +881,7 @@ impl Triangle {
     /// and records the direction in which the values should
     /// be read in the `*_forward` values.
     ///
-    fn subdivide_edges<'a>(
-        &self,
-        edges: &mut [Edge],
-        points: &mut usize,
-    ) {
+    fn subdivide_edges<'a>(&self, edges: &mut [Edge], points: &mut usize) {
         let mut divide = |edge_idx: usize| {
             if !edges[edge_idx].done {
                 edges[edge_idx].points.push(*points as u32);
@@ -949,26 +932,13 @@ impl Triangle {
     /// simply added to the buffer and the indices recorded,
     /// but no calculations are performed.
     ///
-    fn subdivide(
-        &mut self,
-        edges: &mut [Edge],
-        points: &mut usize,
-        shape: &impl BaseShape,
-    ) {
-        let side_length = edges[self.ab_edge].points.len() + 1;
-
-        if side_length > 2 {
-            self.contents
-                .subdivide(points, shape);
+    fn subdivide(&mut self, points: &mut usize, subdivision_level: usize) {
+        if subdivision_level >= 1 {
+            self.contents.subdivide(points);
         }
     }
 
-    fn calculate(
-        &mut self,
-        edges: &mut [Edge],
-        points: &mut [Vec3A],
-        shape: &impl BaseShape,
-    ) {
+    fn calculate(&mut self, edges: &mut [Edge], points: &mut [Vec3A], shape: &impl BaseShape) {
         let side_length = self.calculate_edges(edges, points, shape) + 1;
 
         if side_length > 2 {
@@ -987,8 +957,7 @@ impl Triangle {
             } else {
                 Backward(&edges[self.ca_edge].points)
             };
-            self.contents
-                .calculate(ab, bc, ca, points, shape);
+            self.contents.calculate(ab, bc, ca, points, shape);
         }
     }
 
@@ -1111,34 +1080,23 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         let mut new_points = this.points.len();
 
-        for _ in 0..subdivisions {
-            for triangle in &mut *this.triangles {
-                triangle.subdivide_edges(&mut *this.shared_edges, &mut new_points);
-            }
-            for edge in &mut *this.shared_edges {
-                edge.done = false;
-            }
+        for edge in &mut *this.shared_edges {
+            edge.subdivide_n_times(subdivisions, &mut new_points);
+            edge.done = false;
         }
 
         for triangle in &mut *this.triangles {
-            for _ in 0..subdivisions {
-                triangle.subdivide(
-                    &mut *this.shared_edges,
-                    &mut new_points,
-                    &this.shape,
-                );
+            for i in 0..subdivisions {
+                triangle.subdivide(&mut new_points, i);
             }
         }
 
         let diff = new_points - this.points.len();
-        this.points.extend(std::iter::repeat(Vec3A::ZERO).take(diff));
+        this.points
+            .extend(std::iter::repeat(Vec3A::ZERO).take(diff));
 
         for triangle in &mut *this.triangles {
-            triangle.calculate(
-                &mut *this.shared_edges,
-                &mut this.points,
-                &this.shape,
-            );
+            triangle.calculate(&mut *this.shared_edges, &mut this.points, &this.shape);
         }
 
         this.data = this.points.iter().copied().map(generator).collect();
@@ -1158,27 +1116,23 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         let mut new_points = self.points.len();
 
+        let subdivision_level = self.shared_edges[0].points.len();
+
+        for edge in &mut *self.shared_edges {
+            edge.subdivide_n_times(1, &mut new_points);
+            edge.done = false;
+        }
+
         for triangle in &mut *self.triangles {
-            triangle.subdivide(
-                &mut *self.shared_edges,
-                &mut new_points,
-                &self.shape,
-            );
-            triangle.subdivide_edges(
-                &mut self.shared_edges,
-                &mut new_points,
-            );
+            triangle.subdivide(&mut new_points, subdivision_level);
         }
 
         let diff = new_points - self.points.len();
-        self.points.extend(std::iter::repeat(Vec3A::ZERO).take(diff));
+        self.points
+            .extend(std::iter::repeat(Vec3A::ZERO).take(diff));
 
         for triangle in &mut *self.triangles {
-            triangle.calculate(
-                &mut *self.shared_edges,
-                &mut self.points,
-                &self.shape,
-            );
+            triangle.calculate(&mut *self.shared_edges, &mut self.points, &self.shape);
         }
     }
 
@@ -1583,12 +1537,13 @@ mod adjacency {
 
     impl AdjacencyBuilder {
         pub fn new(points_len: usize) -> Self {
-            let state = std::iter::repeat(RehexState::Empty).take(points_len).collect::<Vec<_>>();
-            let result = std::iter::repeat(ArrayVec::new()).take(points_len).collect::<Vec<_>>();
-            Self {
-                state,
-                result
-            }
+            let state = std::iter::repeat(RehexState::Empty)
+                .take(points_len)
+                .collect::<Vec<_>>();
+            let result = std::iter::repeat(ArrayVec::new())
+                .take(points_len)
+                .collect::<Vec<_>>();
+            Self { state, result }
         }
 
         pub fn add_indices(&mut self, indices: &[u32]) {
@@ -1972,8 +1927,8 @@ mod tests {
 
     #[cfg(feature = "adjacency")]
     mod adjacency {
-        use crate::{shapes::IcoSphere, adjacency::AdjacencyBuilder};
         use crate::adjacency::RehexState;
+        use crate::{adjacency::AdjacencyBuilder, shapes::IcoSphere};
 
         #[test]
         fn creation() {
