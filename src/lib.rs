@@ -876,26 +876,6 @@ impl Triangle {
         }
     }
 
-    ///
-    /// Subdivides the edges of this triangle if necessary,
-    /// and records the direction in which the values should
-    /// be read in the `*_forward` values.
-    ///
-    fn subdivide_edges<'a>(&self, edges: &mut [Edge], points: &mut usize) {
-        let mut divide = |edge_idx: usize| {
-            if !edges[edge_idx].done {
-                edges[edge_idx].points.push(*points as u32);
-                *points += 1;
-
-                edges[edge_idx].done = true;
-            }
-        };
-
-        divide(self.ab_edge);
-        divide(self.bc_edge);
-        divide(self.ca_edge);
-    }
-
     fn calculate_edges(
         &mut self,
         edges: &mut [Edge],
