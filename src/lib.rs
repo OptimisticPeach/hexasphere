@@ -236,7 +236,7 @@ pub trait EquilateralBaseShape: BaseShape {
 ///
 /// The edge between two main triangles.
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Edge {
     ///
     /// Indices of the points between the endpoints.
@@ -1014,6 +1014,7 @@ impl Triangle {
 /// than or equal to `1.0`. This is why all default shapes
 /// lie on the unit sphere.
 ///
+#[derive(Clone)]
 pub struct Subdivided<T, S: BaseShape> {
     points: Vec<Vec3A>,
     data: Vec<T>,
