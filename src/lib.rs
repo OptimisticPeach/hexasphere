@@ -1722,6 +1722,11 @@ mod tests {
     }
 
     #[test]
+    fn clone() {
+        let _x = IcoSphere::new(0, |_| ()).clone();
+    }
+
+    #[test]
     fn one() {
         let x = IcoSphere::new(1, |_| ());
         x.get_indices(0, &mut Vec::new());
