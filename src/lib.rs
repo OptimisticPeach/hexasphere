@@ -1229,7 +1229,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Returns the mutable custom data created by the generator function.
+    /// Returns mutable access to the custom data created by the generator function.
     ///
     pub fn raw_data_mut(&mut self) -> &mut [T] {
         &mut self.data
@@ -1730,7 +1730,7 @@ mod tests {
 
     #[test]
     fn clone() {
-        let _x = IcoSphere::new(0, |_| ()).clone();
+        let _x = IcoSphere::new(6, |_| ()).clone();
     }
 
     #[test]
