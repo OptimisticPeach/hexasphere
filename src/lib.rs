@@ -1014,7 +1014,7 @@ impl Triangle {
 /// than or equal to `1.0`. This is why all default shapes
 /// lie on the unit sphere.
 ///
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Subdivided<T, S: BaseShape> {
     points: Vec<Vec3A>,
     data: Vec<T>,
