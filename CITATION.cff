@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Buhring Espinoza"
+  given-names: "Patrik"
+  orcid: "https://orcid.org/0009-0001-6768-0958"
+title: "Hexasphere: Rust sphere generation"
+version: 14.0.0
+doi: 10.5281/zenodo.1234
+date-released: 2024-06-20
+url: "https://crates.io/crates/hexasphere"

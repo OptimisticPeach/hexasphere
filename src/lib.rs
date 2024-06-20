@@ -244,7 +244,7 @@ struct Edge {
     points: Vec<u32>,
     ///
     /// Whether this edge has already been processed
-    /// or not.
+    /// or not for point generation.
     ///
     done: bool,
 }
@@ -1090,31 +1090,33 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     /// to recalculate vertices (To not calculate vertices between many
     /// subdivisions).
     ///
-    pub fn subdivide(&mut self) {
-        for Edge { done, .. } in &mut *self.shared_edges {
-            *done = false;
-        }
-
+    pub fn subdivide(&mut self, times: usize) {
         let mut new_points = self.points.len();
 
         let subdivision_level = self.shared_edges[0].points.len();
 
         for edge in &mut *self.shared_edges {
-            edge.subdivide_n_times(1, &mut new_points);
+            edge.subdivide_n_times(times, &mut new_points);
             edge.done = false;
         }
 
         for triangle in &mut *self.triangles {
-            triangle.subdivide(&mut new_points, subdivision_level);
+            for _ in 0..times {
+                triangle.subdivide(&mut new_points, subdivision_level);
+            }
         }
 
         let diff = new_points - self.points.len();
         self.points
             .extend(std::iter::repeat(Vec3A::ZERO).take(diff));
+    }
 
+    pub fn calculate_values(&mut self, generator: impl FnMut(Vec3A) -> T) {
         for triangle in &mut *self.triangles {
             triangle.calculate(&mut *self.shared_edges, &mut self.points, &self.shape);
         }
+
+        self.data = self.points.iter().copied().map(generator).collect();
     }
 
     ///
