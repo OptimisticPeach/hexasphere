@@ -6,6 +6,6 @@ authors:
   orcid: "https://orcid.org/0009-0001-6768-0958"
 title: "Hexasphere: Rust sphere generation"
 version: 14.0.0
-doi: 10.5281/zenodo.1234
+doi: 10.5281/zenodo.12189017 
 date-released: 2024-06-20
 url: "https://crates.io/crates/hexasphere"
