@@ -415,7 +415,7 @@ mod consts {
 
         pub(crate) static INITIAL_POINTS: [Vec3A; 3] = [
             Vec3A::new(
-                SoftF32(-3.0f32).sqrt().div(SoftF32(2.0)).to_f32(),
+                -SoftF32(3.0f32).sqrt().div(SoftF32(2.0)).to_f32(),
                 0.0,
                 -0.5,
             ),
@@ -562,12 +562,12 @@ mod consts {
                 0.0,
             ),
             Vec3A::new(
-                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                -SoftF32(2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
                 SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
                 SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().to_f32(),
             ),
             Vec3A::new(
-                SoftF32(-2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
+                -SoftF32(2.0f32).sqrt().div(SoftF32(3.0)).to_f32(),
                 SoftF32(-1.0).div(SoftF32(3.0)).to_f32(),
                 SoftF32(2.0f32).div(SoftF32(3.0)).sqrt().neg().to_f32(),
             ),
@@ -1139,5 +1139,24 @@ mod consts {
         ];
 
         pub const EDGES: usize = 30;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn assert_normal_numbers() {
+        use super::consts;
+        let all_source_points = [
+            &consts::cube::INITIAL_POINTS[..],
+            &consts::icosphere::INITIAL_POINTS[..],
+            &consts::square::INITIAL_POINTS[..],
+            &consts::tetrasphere::INITIAL_POINTS[..],
+            &consts::triangle::INITIAL_POINTS[..],
+        ];
+
+        for point in all_source_points.iter().flat_map(|x| x.iter()) {
+            assert!(point.is_finite());
+        }
     }
 }
