@@ -2,7 +2,7 @@
 name = "hexasphere"
 version = "14.0.0"
 authors = ["OptimisticPeach <patrikbuhring@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = """
 A library to evenly tile hexagons on a sphere.
 """
