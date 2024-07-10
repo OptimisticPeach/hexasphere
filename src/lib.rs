@@ -45,6 +45,8 @@
 //! the indices provided by the `Subdivided` struct.
 //!
 
+use std::sync::Arc;
+
 use glam::Vec3A;
 
 use slice::Slice::*;
@@ -778,8 +780,19 @@ impl TriangleContents {
         use TriangleContents::*;
         match self {
             None | One(_) | Three { .. } => {}
-            &Six { ab, bc, ca, .. } => {
-                buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]);
+            Six { ab, bc, ca, .. } => {
+                let ab = std::slice::from_ref(ab);
+                let bc = std::slice::from_ref(bc);
+                let ca = std::slice::from_ref(ca);
+                // buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]);
+                add_line_indices_triangular(
+                    delta,
+                    Forward(ab),
+                    Forward(bc),
+                    Forward(ca),
+                    &TriangleContents::None,
+                    buffer,
+                );
                 breaks(buffer);
             }
             &More {
@@ -1177,20 +1190,6 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Gets the wireframe indices for the specified edge of the base shape.
-    ///
-    /// See [`Self::get_line_indices`] for more on `delta`.
-    ///
-    pub fn get_major_edge_line_indices(&self, edge: usize, buffer: &mut Vec<u32>, delta: usize) {
-        buffer.extend(
-            self.shared_edges[edge]
-                .points
-                .iter()
-                .map(|x| x + delta as u32),
-        );
-    }
-
-    ///
     /// Gets the wireframe indices for all main triangles in the shape,
     /// as well as all edges.
     ///
@@ -1205,11 +1204,42 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         for i in 0..self.triangles.len() {
             self.get_line_indices(&mut buffer, i, delta, &mut breaks);
+            breaks(&mut buffer);
         }
 
-        for i in 0..self.shared_edges.len() {
-            self.get_major_edge_line_indices(i, &mut buffer, delta);
-            breaks(&mut buffer);
+        let delta = delta as u32;
+
+        for triangle in &*self.triangles {
+            for (p1, p2, edge, forward) in [
+                (
+                    triangle.a,
+                    triangle.b,
+                    triangle.ab_edge,
+                    triangle.ab_forward,
+                ),
+                (
+                    triangle.b,
+                    triangle.c,
+                    triangle.bc_edge,
+                    triangle.bc_forward,
+                ),
+                (
+                    triangle.c,
+                    triangle.a,
+                    triangle.ca_edge,
+                    triangle.ca_forward,
+                ),
+            ] {
+                if !forward {
+                    continue;
+                }
+
+                buffer.push(p1 + delta);
+                buffer.extend(self.shared_edges[edge].points.iter().map(|x| x + delta));
+                buffer.push(p2 + delta);
+
+                breaks(&mut buffer);
+            }
         }
 
         buffer
@@ -1438,9 +1468,12 @@ fn add_indices_triangular(
     ]);
 }
 
-///
 /// Adds the indices of the triangles in this "layer" of the triangle to
 /// the buffer in line strip format.
+///
+/// Does the zig-zag between the current one and the contents,
+/// and also the ring of the contents. (Since the outermost
+/// ring is dealt with separately by `get_major_edge_line_indices`.
 ///
 /// This is used to create a wireframe look.
 ///
@@ -1454,29 +1487,63 @@ fn add_line_indices_triangular(
     contents: &TriangleContents,
     buffer: &mut Vec<u32>,
 ) {
+    // if the number of points on our edge is zero, we have
+    // no interior, and no zigzag
+    if ab.len() == 0 {
+        return;
+    }
+
+    // if the number of points on our edge is one, there is no
+    // interior, and there is only the zigzag
     if ab.len() == 1 {
-        buffer.extend_from_slice(&[ab[0] + delta, bc[0] + delta, ca[0] + delta]);
+        #[rustfmt::skip]
+        buffer.extend_from_slice(&[
+            ab[0] + delta,
+            bc[0] + delta,
+            ca[0] + delta,
+            ab[0] + delta,
+        ]);
+        return;
+    }
+
+    // if the number of points on our edge is two, then `contents`
+    // is a single point and we get a three leaf clover
+    if ab.len() == 2 {
+        let inner = contents.idx_ab(0);
+        buffer.extend_from_slice(&[
+            inner + delta,
+            ab[1] + delta,
+            bc[0] + delta,
+            inner + delta,
+            bc[1] + delta,
+            ca[0] + delta,
+            inner + delta,
+            ca[1] + delta,
+            ab[0] + delta,
+            inner + delta,
+        ]);
         return;
     }
 
     buffer.reserve((ab.len() - 1) * 9);
 
-    if ab.len() != 2 {
-        for i in 0..ab.len() - 2 {
-            buffer.push(contents.idx_ab(i) + delta);
-        }
-
-        for i in 0..bc.len() - 2 {
-            buffer.push(contents.idx_bc(i) + delta);
-        }
-
-        for i in 0..ca.len() - 2 {
-            buffer.push(contents.idx_ca(i) + delta);
-        }
-    } else {
-        buffer.push(contents.idx_ca(0) + delta);
+    // Add the inner loop
+    for i in 0..ab.len() - 2 {
+        buffer.push(contents.idx_ab(i) + delta);
     }
 
+    for i in 0..bc.len() - 2 {
+        buffer.push(contents.idx_bc(i) + delta);
+    }
+
+    for i in 0..ca.len() - 2 {
+        buffer.push(contents.idx_ca(i) + delta);
+    }
+
+    // close the inner loop
+    buffer.push(contents.idx_ab(0) + delta);
+
+    // do zigzag
     buffer.push(ab[0] + delta);
 
     for i in (1..ca.len()).rev() {
@@ -1497,6 +1564,8 @@ fn add_line_indices_triangular(
         buffer.push(ab[i] + delta);
         buffer.push(contents.idx_ab(i - 1) + delta);
     }
+
+    buffer.push(ab[0] + delta);
 }
 
 #[cfg(feature = "adjacency")]
