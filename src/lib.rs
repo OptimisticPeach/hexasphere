@@ -1,18 +1,24 @@
 //!
 //! Library for subdividing shapes made of triangles.
 //!
-//! This library defines `Subdivided<T, S>`. This struct
+//! This library defines [`Subdivided<T, S>`](Subdivided). This struct
 //! allows one to define a base shape using `S` and the
-//! `BaseShape` trait, and to subdivide it using the
+//! [`BaseShape`] trait, and to subdivide it using the
 //! interpolation functions defined as part of `S`.
 //!
-//! This includes a few base shapes:
+//! Shapes define the starting vertices and triangles, as well as
+//! the type of interpolation used and thus the smooth shape that is approximated.
+//! These provided shapes generate **spheres**:
 //!
-//! - Icosahedron
-//! - Tetrahedron
-//! - Square
-//! - Triangle
-//! - Cube
+//! - [`shapes::CubeSphere`] (cube)
+//! - [`shapes::IcoSphere`] (icosahedron)
+//! - [`shapes::NormIcoSphere`] (icosahedron)
+//! - [`shapes::TetraSphere`] (tetrahedron)
+//!
+//! Two flat shapes are also provided:
+//!
+//! - [`shapes::SquarePlane`]
+//! - [`shapes::TrianglePlane`]
 //!
 //! ## Example usage
 //!
@@ -58,7 +64,7 @@ pub mod shapes;
 mod slice;
 
 ///
-/// Defines the setup for a base shape, and the functions
+/// Defines the geometry of the shape to be subdivided, and the functions
 /// used in interpolation.
 ///
 /// If you want to use a different interpolation function,
@@ -109,9 +115,8 @@ mod slice;
 ///
 pub trait BaseShape {
     ///
-    /// The initial vertices for the triangle. Note that
-    /// `Vec3A::new` is not a `const fn()`, hence I recommend
-    /// you use `lazy_static`. Check the source file for this
+    /// The vertices for all main triangles of the shape.
+    /// Check the source file for this
     /// crate and look for the constants module at the bottom
     /// for an example.
     ///
@@ -125,18 +130,10 @@ pub trait BaseShape {
     fn initial_points(&self) -> Vec<Vec3A>;
 
     ///
-    /// Base triangles for the shape.
+    /// Main triangles for the shape;
+    /// that is, the triangles which exist before subdivision.
     ///
-    /// - The fields `a`, `b`, and `c` define the indices for
-    /// the points of the triangles given the data present
-    /// in `initial_points`. Note that this crate assumes
-    /// points are in a counter clockwise ordering.
-    /// - The fields `ab_edge`, `bc_edge`, `ca_edge` mark the
-    /// index of the edge which `a`/`b`, `b`/`c`, and `c`/`a`
-    /// border respectively. While theoretically you could give
-    /// each triangle its own edge, minimizing edges saves on
-    /// memory footprint and performance.
-    /// - Triangles should be created through [`Triangle::new`].
+    /// See [`Triangle::new()`] for details.
     ///
     fn triangles(&self) -> Box<[Triangle]>;
 
@@ -184,7 +181,7 @@ pub trait BaseShape {
 
     ///
     /// If an optimization is available for the case where `p`
-    /// varies but `a` and `b` don't this function should implement
+    /// varies but `a` and `b` don't, this function should implement
     /// it.
     ///
     /// ### Parameters
@@ -486,7 +483,7 @@ impl TriangleContents {
     ///
     /// Subdivides this given the surrounding points.
     ///
-    pub fn subdivide(&mut self, points: &mut usize) {
+    fn subdivide(&mut self, points: &mut usize) {
         use TriangleContents::*;
 
         match self {
@@ -824,6 +821,9 @@ impl TriangleContents {
 ///
 /// A main triangle on the base shape of a subdivided shape.
 ///
+/// Main triangles are those which are part of the definition of the base shape,
+/// rather than created by subdivision.
+///
 /// The specification of the library expects `a`, `b`, and `c`
 /// to be in a counter-clockwise winding.
 ///
@@ -860,8 +860,23 @@ impl Default for Triangle {
 
 impl Triangle {
     ///
-    /// Creates a new `Triangle` given the data. This is done
-    /// to avoid boilerplate.
+    /// Creates a new `Triangle` given the necessary data.
+    ///
+    /// - The fields `a`, `b`, and `c` are the indices into
+    ///   [`BaseShape::initial_points()`] which are the vertices
+    ///   of this triangle.
+    ///   Note that this crate assumes
+    ///   points are in a counter-clockwise ordering.
+    /// - The fields `ab_edge`, `bc_edge`, `ca_edge` mark the
+    ///   index of the edge which `a`/`b`, `b`/`c`, and `c`/`a`
+    ///   border respectively. While theoretically you could give
+    ///   each triangle its own edge, sharing edges between triangles
+    ///   saves on memory footprint and performance.
+    ///
+    ///   There is no explicit list of edges; they are defined by how
+    ///   they are used here. However, the total number of edges must
+    ///   be specified in [`BaseShape::EDGES`], and all edge indices
+    ///   from 0 to `EDGES - 1` must be used.
     ///
     pub const fn new(
         a: u32,
@@ -1014,11 +1029,14 @@ impl Triangle {
 }
 
 ///
-/// A progressively subdivided shape which can record
-/// the indices of the points and list out the individual
-/// triangles of the resulting shape.
+/// A subdivided shape generated from some [`BaseShape`] and a subdivision level.
 ///
-/// All base triangles specified by `S` in [`BaseShape`]
+/// The subdivided shape is defined, as is conventional in most 3D graphics systems,
+/// as a list of vertices, and a list of indices into the vertex list which connect
+/// the vertices into primitive shapes. [`Subdivided`] can provide triangle-list indices
+/// indices for solid surface rendering, and line-strip indices for wireframe rendering.
+///
+/// All main triangles specified by `S` in [`BaseShape`]
 /// are expected to be in counter clockwise winding.
 ///
 /// Points are preferably stored with coordinates less
@@ -1035,22 +1053,29 @@ pub struct Subdivided<T, S: BaseShape> {
     shape: S,
 }
 
-impl<T, S: BaseShape + Default> Subdivided<T, S> {
-    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self {
-        Self::new_custom_shape(subdivisions, generator, Default::default())
-    }
-}
-
 impl<T, S: BaseShape> Subdivided<T, S> {
+    /// Creates the base shape from `S` and subdivides it.
+    ///
+    /// This is equivalent to
+    /// `Subdivided::new_custom_shape(subdivisions, generator, S::default())`
+    /// and is convenient when `S` implements [`Default`].
+    pub fn new(subdivisions: usize, generator: impl FnMut(Vec3A) -> T) -> Self
+    where
+        S: Default,
+    {
+        Self::new_custom_shape(subdivisions, generator, S::default())
+    }
     ///
     /// Creates the base shape from `S` and subdivides it.
     ///
-    /// - `subdivisions` specifies the number of times a subdivision
-    /// will be created. In other terms, this is the number of auxiliary
-    /// points between the vertices on the original shape.
+    /// - `subdivisions` specifies the number of auxiliary points that will be created
+    ///   along the edges the vertices of the base shape. For example, if `subdivisions`
+    ///   is 0, then the base shape is unaltered; if `subdivisions` is 3, then each edge
+    ///   of the base shape will have 3 added points, forming 4 triangle edges.
     ///
-    /// - `generator` is a function run once all the subdivisions are
-    /// applied and its values are stored in an internal `Vec`.
+    /// - `generator` is a function run for each vertex once all the subdivisions are
+    ///   applied, and its values are stored in an internal `Vec`,
+    ///   accessible from [`Self::raw_data()`].
     ///
     pub fn new_custom_shape(
         subdivisions: usize,
@@ -1097,22 +1122,23 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Subdivides all triangles. `calculate` signals whether or not
-    /// to recalculate vertices (To not calculate vertices between many
-    /// subdivisions).
+    /// Increases the current subdivision count by `amount`.
     ///
-    pub fn subdivide(&mut self, times: usize) {
+    /// After calling this, you must call [`Self::calculate_values()`]
+    /// to compute new vertex data.
+    ///
+    pub fn subdivide(&mut self, amount: usize) {
         let mut new_points = self.points.len();
 
         let subdivision_level = self.shared_edges[0].points.len();
 
         for edge in &mut *self.shared_edges {
-            edge.subdivide_n_times(times, &mut new_points);
+            edge.subdivide_n_times(amount, &mut new_points);
             edge.done = false;
         }
 
         for triangle in &mut *self.triangles {
-            for _ in 0..times {
+            for _ in 0..amount {
                 triangle.subdivide(&mut new_points, subdivision_level);
             }
         }
@@ -1122,6 +1148,9 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             .extend(std::iter::repeat(Vec3A::ZERO).take(diff));
     }
 
+    ///
+    /// Recalculate data after [`Self::subdivide()`].
+    ///
     pub fn calculate_values(&mut self, generator: impl FnMut(Vec3A) -> T) {
         for triangle in &mut *self.triangles {
             triangle.calculate(&mut *self.shared_edges, &mut self.points, &self.shape);
@@ -1131,30 +1160,43 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// The raw points created by the subdivision process.
+    /// The vertex positions created by the subdivision process.
     ///
     pub fn raw_points(&self) -> &[Vec3A] {
         &self.points
     }
 
     ///
-    /// Appends the indices for the triangle into `buffer`.
+    /// Appends the indices for the subdivided form of the specified
+    /// main triangle into `buffer`.
     ///
-    /// The specified triangle is a main triangle on the base
+    /// The specified `triangle` is a main triangle on the base
     /// shape. The range of this should be limited to the number
     /// of triangles in the base shape.
     ///
-    /// Alternatively, use [`get_all_indices`] to get all the
+    /// Alternatively, use [`Self::get_all_indices`] to get all the
     /// indices.
     ///
-    /// [`get_all_indices`]: #method.get_all_indices
+    /// Each element put into `buffer` is an index into [`Self::raw_data`]
+    /// or [`Self::raw_points`] specifying the position of a triangle vertex.
+    /// The first three elements specify the three vertices of a triangle
+    /// to be drawn, and the next three elements specify another triangle,
+    /// and so on.
     ///
     pub fn get_indices(&self, triangle: usize, buffer: &mut Vec<u32>) {
         self.triangles[triangle].add_indices(buffer, &self.shared_edges);
     }
 
     ///
-    /// Gets the indices for all main triangles in the shape.
+    /// Gets the indices for the triangles making up the subdivided shape.
+    ///
+    /// Each element of the returned [`Vec`] is an index into [`Self::raw_data`]
+    /// or [`Self::raw_points`] specifying the position of a triangle vertex.
+    /// The first three elements specify the three vertices of a triangle
+    /// to be drawn, and the next three elements specify another triangle,
+    /// and so on.
+    ///
+    /// Together, these triangles cover the entire surface of the shape.
     ///
     pub fn get_all_indices(&self) -> Vec<u32> {
         let mut buffer = Vec::new();
@@ -1167,15 +1209,12 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Gets the wireframe indices for the contents of a specified triangle.
+    /// Appends indices for the wireframe of the subdivided form of
+    /// the specified main triangle to `buffer`.
     ///
-    /// `delta` is added to all of the indices pushed into the buffer, and
-    /// is generally intended to be used to have a NaN vertex at zero. Set
-    /// to zero to produce the indices as if there was no NaN vertex.
-    ///
-    /// `breaks` is run every time there is a necessary break in the line
-    /// strip. Use this to, for example, swap out the buffer using
-    /// [`std::mem::swap`], or push a NaN index into the buffer.
+    /// This is equivalent to [`Self::get_all_line_indices`] except that it
+    /// selects a single main triangle from the base shape. See its documentation
+    /// for the format of the result, and how to use `delta` and `breaks`.
     ///
     pub fn get_line_indices(
         &self,
@@ -1188,8 +1227,10 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Gets the wireframe indices for the specified edge of the base shape.
+    /// Appends indices for the wireframe of the subdivided form of
+    /// the specified main triangle edge to `buffer`.
     ///
+    /// The valid range of `edge` is `0..(S::EDGES)`.
     /// See [`Self::get_line_indices`] for more on `delta`.
     ///
     #[deprecated = "Flawed. Use `get_major_edges_line_indices()` instead."]
@@ -1203,13 +1244,12 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Gets the wireframe (line strip) indices which can be used to draw the edges of the
-    /// base shape’s triangles, in their subdivided form.
+    /// Appends indices for the wireframe of the subdivided form of
+    /// the base shape's main triangles' edges to `buffer`.
     ///
     /// Compared to [`Self::get_all_line_indices`], this does not return edges of any of the
-    /// triangles which were created by subdivision — only the original triangles.
-    ///
-    /// See [`Self::get_line_indices`] for more on `delta`, and `breaks`.
+    /// triangles which were created by subdivision — only edges of the original triangles.
+    /// See that method's documentation for how to use `delta` and `breaks`.
     ///
     pub fn get_major_edges_line_indices(
         &self,
@@ -1252,10 +1292,24 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Gets the wireframe indices for all main triangles in the shape,
-    /// as well as all edges.
+    /// Returns a vector of indices for the wireframe of the subdivided mesh.
     ///
-    /// See [`Self::get_line_indices`] for more on `delta`, and `breaks`.
+    /// Each element in the returned [`Vec`] is an index into [`Self::raw_data`]
+    /// or [`Self::raw_points`] specifying the position of a triangle vertex.
+    /// The indices are formatted as "line strips"; that is, each vertex
+    /// should be connected to the previous by a line, except where a break is
+    /// specified.
+    ///
+    /// The `breaks` function is run every time there is a necessary break in
+    /// the line strip. Use this to, for example, swap out the buffer using
+    /// [`std::mem::take`], or push a special break-marking index into the buffer.
+    ///
+    /// `delta` is added to all of the indices pushed into the buffer, and
+    /// is generally intended to be used together with `breaks` to allow a
+    /// marker index at zero.
+    /// This marker index might be used to refer to a vertex with position
+    /// set to NaN, or parsed in some other way by the graphics API the indices
+    /// are fed to.
     ///
     pub fn get_all_line_indices(
         &self,
@@ -1285,7 +1339,9 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Returns the custom data created by the generator function.
+    /// Returns the custom data for each vertex created by the generator function.
+    ///
+    /// The length of this slice is equal to the number of vertices in the subdivided shape.
     ///
     pub fn raw_data(&self) -> &[T] {
         &self.data
@@ -1293,6 +1349,8 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
     ///
     /// Returns mutable access to the custom data created by the generator function.
+    ///
+    /// The length of this slice is equal to the number of vertices in the subdivided shape.
     ///
     pub fn raw_data_mut(&mut self) -> &mut [T] {
         &mut self.data
