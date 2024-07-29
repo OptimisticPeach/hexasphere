@@ -45,8 +45,6 @@
 //! the indices provided by the `Subdivided` struct.
 //!
 
-use std::sync::Arc;
-
 use glam::Vec3A;
 
 use slice::Slice::*;
@@ -1190,25 +1188,35 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     }
 
     ///
-    /// Gets the wireframe indices for all main triangles in the shape,
-    /// as well as all edges.
+    /// Gets the wireframe indices for the specified edge of the base shape.
+    ///
+    /// See [`Self::get_line_indices`] for more on `delta`.
+    ///
+    #[deprecated = "Flawed. Use `get_major_edges_line_indices()` instead."]
+    pub fn get_major_edge_line_indices(&self, edge: usize, buffer: &mut Vec<u32>, delta: usize) {
+        buffer.extend(
+            self.shared_edges[edge]
+                .points
+                .iter()
+                .map(|x| x + delta as u32),
+        );
+    }
+
+    ///
+    /// Gets the wireframe (line strip) indices which can be used to draw the edges of the
+    /// base shape’s triangles, in their subdivided form.
+    ///
+    /// Compared to [`Self::get_all_line_indices`], this does not return edges of any of the
+    /// triangles which were created by subdivision — only the original triangles.
     ///
     /// See [`Self::get_line_indices`] for more on `delta`, and `breaks`.
     ///
-    pub fn get_all_line_indices(
+    pub fn get_major_edges_line_indices(
         &self,
-        delta: usize,
+        buffer: &mut Vec<u32>,
+        delta: u32,
         mut breaks: impl FnMut(&mut Vec<u32>),
-    ) -> Vec<u32> {
-        let mut buffer = Vec::new();
-
-        for i in 0..self.triangles.len() {
-            self.get_line_indices(&mut buffer, i, delta, &mut breaks);
-            breaks(&mut buffer);
-        }
-
-        let delta = delta as u32;
-
+    ) {
         for triangle in &*self.triangles {
             for (p1, p2, edge, forward) in [
                 (
@@ -1238,9 +1246,32 @@ impl<T, S: BaseShape> Subdivided<T, S> {
                 buffer.extend(self.shared_edges[edge].points.iter().map(|x| x + delta));
                 buffer.push(p2 + delta);
 
-                breaks(&mut buffer);
+                breaks(buffer);
             }
         }
+    }
+
+    ///
+    /// Gets the wireframe indices for all main triangles in the shape,
+    /// as well as all edges.
+    ///
+    /// See [`Self::get_line_indices`] for more on `delta`, and `breaks`.
+    ///
+    pub fn get_all_line_indices(
+        &self,
+        delta: usize,
+        mut breaks: impl FnMut(&mut Vec<u32>),
+    ) -> Vec<u32> {
+        let mut buffer = Vec::new();
+
+        // Pushes all of the subdivision-created lines that are *not* part of `self.shared_edges`.
+        for i in 0..self.triangles.len() {
+            self.get_line_indices(&mut buffer, i, delta, &mut breaks);
+            breaks(&mut buffer);
+        }
+
+        let delta = delta as u32;
+        self.get_major_edges_line_indices(&mut buffer, delta, &mut breaks);
 
         buffer
     }
@@ -1730,7 +1761,7 @@ mod adjacency {
 
 #[cfg(test)]
 mod tests {
-    use crate::shapes::IcoSphere;
+    use crate::shapes::{IcoSphere, SquarePlane};
     use crate::Slice::Forward;
     use glam::Vec3A;
 
@@ -1986,6 +2017,29 @@ mod tests {
         assert_eq!(
             buffer,
             &[9, 10, 11, 0, 8, 9, 7, 11, 6, 5, 11, 4, 10, 3, 2, 10, 1, 9]
+        );
+    }
+
+    #[test]
+    fn getting_major_edges() {
+        // Use the square shape because it has few and simple vertices.
+        let square = SquarePlane::new(1, |_| ());
+
+        let mut buffer = Vec::new();
+        square.get_major_edges_line_indices(&mut buffer, 1, |v| v.push(0));
+
+        assert_eq!(
+            buffer,
+            vec![
+                // Note: this is a list of five edges because the square is two triangles,
+                // so there is a diagonal edge which counts as a major edge.
+                // Each one has 2 original vertices and 1 interpolated vertex.
+                1, 6, 2, 0, //
+                2, 7, 3, 0, //
+                3, 5, 1, 0, //
+                3, 8, 4, 0, //
+                4, 9, 1, 0, //
+            ]
         );
     }
 
