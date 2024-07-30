@@ -1,0 +1,81 @@
+name: Build & Test
+
+permissions: {}
+
+on:
+  # Run on all pull requests
+  pull_request:
+  # Run if manually requested
+  workflow_dispatch:
+  # Run whenever these branches are updated.
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  # Incremental compilation is slower and not useful here.
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      # Ensure we have an up-to-date toolchain
+      run: |
+        rustup toolchain install stable --profile=minimal
+        rustup default stable
+
+    - run: cargo test
+  
+    - run: cargo test --no-default-features
+
+    - run: cargo test --all-features
+
+    - run: cargo update
+
+    # Check for breakage caused by dependencies.
+    - name: cargo test --all-features (after update)
+      run: cargo test --all-features
+
+  lint:
+    runs-on: ubuntu-latest
+
+    # Cause all warnings to turn into errors, failing this job.
+    env:
+      RUSTFLAGS: '-Dwarnings'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      # Ensure we have an up-to-date toolchain
+      run: |
+        rustup toolchain install stable --profile=minimal --component=clippy
+        rustup default stable
+
+    # This could be upgraded to `cargo clippy` if desired.
+    - run: cargo check
+
+    # Only rustdoc produces "broken intra-doc link" warnings.
+    - run: cargo doc
+
+  # Detect breaking changes (e.g. removing an item or trait implementation)
+  # not accompanied by major version bumps, vs. the last crates.io release.
+  semver:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # This will cache the build of `cargo-semver-checks` itself.
+    # We don't use it for other jobs because `hexasphere` itself is quick to build.
+    - uses: Swatinem/rust-cache@v2.7.3
+
+    - uses: obi1kenobi/cargo-semver-checks-action@v2.3
+      with:
+        package: "hexasphere"
