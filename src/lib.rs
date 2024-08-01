@@ -2034,7 +2034,7 @@ mod tests {
             &mut buffer,
         );
 
-        assert_eq!(buffer, &[0, 1, 2, 0]);
+        assert_eq!(buffer, &[0, 1, 2]);
     }
 
     #[test]
@@ -2053,7 +2053,7 @@ mod tests {
             &mut buffer,
         );
 
-        assert_eq!(buffer, &[6, 1, 2, 6, 3, 4, 6, 5, 0, 6]);
+        assert_eq!(buffer, &[6, 0, 5, 6, 4, 3, 6, 2, 1, 6]);
     }
 
     #[test]
@@ -2074,7 +2074,7 @@ mod tests {
 
         assert_eq!(
             buffer,
-            &[9, 10, 11, 9, 0, 8, 9, 7, 11, 6, 5, 11, 4, 10, 3, 2, 10, 1, 9, 0]
+            &[9, 10, 11, 0, 8, 9, 7, 11, 6, 5, 11, 4, 10, 3, 2, 10, 1, 9]
         );
     }
 
