@@ -1,6 +1,6 @@
 [package]
 name = "hexasphere"
-version = "14.1.0"
+version = "14.2.0"
 authors = ["OptimisticPeach <patrikbuhring@gmail.com>"]
 edition = "2021"
 description = """
@@ -10,7 +10,13 @@ readme = "readme.md"
 repository = "https://github.com/OptimisticPeach/hexasphere.git"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "graphics", "hexagons", "sphere", "math"]
-categories = ["algorithms", "data-structures", "graphics", "mathematics", "rendering::data-formats"]
+categories = [
+    "algorithms",
+    "data-structures",
+    "graphics",
+    "mathematics",
+    "rendering::data-formats",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,6 +26,6 @@ shape-extras = []
 
 [dependencies]
 constgebra = "0.1.4"
-glam = "0.28.0"
+glam = "0.29.0"
 
 tinyvec = { version = "1.6.0", optional = true }
