@@ -1,6 +1,6 @@
 [package]
 name = "hexasphere"
-version = "14.2.0"
+version = "15.0.0"
 authors = ["OptimisticPeach <patrikbuhring@gmail.com>"]
 edition = "2021"
 description = """
