@@ -60,6 +60,7 @@ use slice::*;
 pub use adjacency::*;
 
 pub mod interpolation;
+mod math;
 pub mod shapes;
 mod slice;
 
