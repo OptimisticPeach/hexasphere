@@ -1,4 +1,4 @@
-use std::ops::Index;
+use core::ops::Index;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 ///

@@ -1,5 +1,5 @@
+use crate::math::{acos, sin as sinf, sqrt};
 use glam::f32::Vec3A;
-
 ///
 /// Implements spherical interpolation along the great arc created by
 /// the initial points. This returns a new point `p` percent of the way
@@ -8,10 +8,10 @@ use glam::f32::Vec3A;
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
 pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
-    let angle = a.dot(b).acos();
+    let angle = acos(a.dot(b));
 
-    let sin = angle.sin().recip();
-    a * (((1.0 - p) * angle).sin() * sin) + b * ((p * angle).sin() * sin)
+    let sin = sinf(angle).recip();
+    a * (sinf((1.0 - p) * angle) * sin) + b * (sinf(p * angle) * sin)
 }
 
 ///
@@ -21,7 +21,7 @@ pub fn geometric_slerp(a: Vec3A, b: Vec3A, p: f32) -> Vec3A {
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
 pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
-    (a + b) * (2.0 * (1.0 + a.dot(b))).sqrt().recip()
+    (a + b) * sqrt(2.0 * (1.0 + a.dot(b))).recip()
 }
 
 ///
@@ -33,14 +33,14 @@ pub fn geometric_slerp_half(a: Vec3A, b: Vec3A) -> Vec3A {
 /// Note: `a` and `b` should both be normalized for normalized results.
 ///
 pub fn geometric_slerp_multiple(a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
-    let angle = a.dot(b).acos();
-    let sin = angle.sin().recip();
+    let angle = acos(a.dot(b));
+    let sin = sinf(angle).recip();
 
     for (percent, index) in indices.iter().enumerate() {
         let percent = (percent + 1) as f32 / (indices.len() + 1) as f32;
 
         points[*index as usize] =
-            a * (((1.0 - percent) * angle).sin() * sin) + b * ((percent * angle).sin() * sin);
+            a * (sinf((1.0 - percent) * angle) * sin) + b * (sinf(percent * angle) * sin);
     }
 }
 
