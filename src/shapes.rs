@@ -1,6 +1,7 @@
 #[cfg(feature = "shape-extras")]
 use super::EquilateralBaseShape;
 use super::{interpolation, BaseShape, Subdivided, Triangle};
+use alloc::{boxed::Box, vec::Vec};
 use glam::Vec3A;
 
 ///
@@ -79,8 +80,7 @@ impl<T> IcoSphere<T> {
         let subdivisions = self.subdivisions as f32 + 1.0;
         const DEFAULT_ANGLE: f32 = 1.10714871779409085306;
         let angle = DEFAULT_ANGLE / subdivisions;
-
-        (angle * 0.5).sin() * 2.0
+        crate::math::sin(angle * 0.5) * 2.0
     }
 }
 

@@ -50,8 +50,16 @@
 //! - `adjacency` allows the user to create neighbour maps from
 //! the indices provided by the `Subdivided` struct.
 //!
+#![cfg_attr(not(feature = "std"), no_std)]
 
 use glam::Vec3A;
+
+#[doc(hidden)]
+#[macro_use]
+extern crate alloc;
+
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 use slice::Slice::*;
 use slice::*;
@@ -60,9 +68,9 @@ use slice::*;
 pub use adjacency::*;
 
 pub mod interpolation;
+mod math;
 pub mod shapes;
 mod slice;
-
 ///
 /// Defines the geometry of the shape to be subdivided, and the functions
 /// used in interpolation.
@@ -776,9 +784,9 @@ impl TriangleContents {
         match self {
             None | One(_) | Three { .. } => {}
             Six { ab, bc, ca, .. } => {
-                let ab = std::slice::from_ref(ab);
-                let bc = std::slice::from_ref(bc);
-                let ca = std::slice::from_ref(ca);
+                let ab = core::slice::from_ref(ab);
+                let bc = core::slice::from_ref(bc);
+                let ca = core::slice::from_ref(ca);
                 // buffer.extend_from_slice(&[ab + delta, bc + delta, ca + delta]);
                 add_line_indices_triangular(
                     delta,
@@ -1110,7 +1118,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         let diff = new_points - this.points.len();
         this.points
-            .extend(std::iter::repeat(Vec3A::ZERO).take(diff));
+            .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
 
         for triangle in &mut *this.triangles {
             triangle.calculate(&mut *this.shared_edges, &mut this.points, &this.shape);
@@ -1145,7 +1153,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         let diff = new_points - self.points.len();
         self.points
-            .extend(std::iter::repeat(Vec3A::ZERO).take(diff));
+            .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
     }
 
     ///
@@ -1662,6 +1670,7 @@ fn add_line_indices_triangular(
 /// Implements neighbour tracking.
 ///
 mod adjacency {
+    use alloc::vec::Vec;
     use tinyvec::ArrayVec;
 
     #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -1685,10 +1694,10 @@ mod adjacency {
 
     impl AdjacencyBuilder {
         pub fn new(points_len: usize) -> Self {
-            let state = std::iter::repeat(RehexState::Empty)
+            let state = core::iter::repeat(RehexState::Empty)
                 .take(points_len)
                 .collect::<Vec<_>>();
-            let result = std::iter::repeat(ArrayVec::new())
+            let result = core::iter::repeat(ArrayVec::new())
                 .take(points_len)
                 .collect::<Vec<_>>();
             Self { state, result }
@@ -1821,6 +1830,7 @@ mod adjacency {
 mod tests {
     use crate::shapes::{IcoSphere, SquarePlane};
     use crate::Slice::Forward;
+    use alloc::vec::Vec;
     use glam::Vec3A;
 
     // Starting points aren't _quite_ precise enough to use `f32::EPSILON`.
@@ -1859,7 +1869,7 @@ mod tests {
         let expected = Vec3A::new(0.0, 0.0767208624118, 0.997052611085);
 
         let mut result = Vec3A::ZERO;
-        geometric_slerp_multiple(p1, p2, &[0], std::slice::from_mut(&mut result));
+        geometric_slerp_multiple(p1, p2, &[0], core::slice::from_mut(&mut result));
 
         assert!((expected - result).length() <= EPSILON);
 
@@ -2103,6 +2113,8 @@ mod tests {
 
     #[cfg(feature = "adjacency")]
     mod adjacency {
+        use alloc::vec::Vec;
+
         use crate::adjacency::RehexState;
         use crate::{adjacency::AdjacencyBuilder, shapes::IcoSphere};
 
