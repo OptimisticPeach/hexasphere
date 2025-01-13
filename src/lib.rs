@@ -52,6 +52,9 @@
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(all(not(feature = "std"), not(feature = "libm")))]
+compile_error!("`libm` feature is required to be enabled in no-std environment");
+
 use glam::Vec3A;
 
 #[doc(hidden)]
