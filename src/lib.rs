@@ -48,7 +48,7 @@
 //!
 //! # Features
 //! - `adjacency` allows the user to create neighbour maps from
-//! the indices provided by the `Subdivided` struct.
+//!   the indices provided by the `Subdivided` struct.
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -136,7 +136,7 @@ pub trait BaseShape {
     /// - `slerp` requires normalized (magnitude 1) data.
     /// - `lerp` doesn't care.
     /// - `normalized_lerp` requires normalized (magnitude 1)
-    /// data.
+    ///   data.
     ///
     fn initial_points(&self) -> Vec<Vec3A>;
 
@@ -169,11 +169,11 @@ pub trait BaseShape {
     /// in this crate:
     /// - [`lerp`] implements linear interpolation.
     /// - [`geometric_slerp`] implements spherical
-    /// interpolation. (Interpolates along an arc on a sphere)
+    ///   interpolation. (Interpolates along an arc on a sphere)
     /// - [`normalized_lerp`] implements cheaper
-    /// yet less accurate spherical interpolation. The accuracy
-    /// decreases as the angle between the two points on the unit
-    /// sphere increases.
+    ///   yet less accurate spherical interpolation. The accuracy
+    ///   decreases as the angle between the two points on the unit
+    ///   sphere increases.
     ///
     /// [`lerp`]: ../fn.lerp.html
     /// [`geometric_slerp`]: ../fn.geometric_slerp.html
@@ -199,11 +199,11 @@ pub trait BaseShape {
     /// - `a`: start.
     /// - `b`: end.
     /// - `indices`: list of indices to index into `points`. `points`
-    /// at the index should contain the result. The index (n) of an
-    /// index should correspond with the nth point in a distribution
-    /// of `indices.len()` points between (exclusive) `a` and `b`.
+    ///   at the index should contain the result. The index (n) of an
+    ///   index should correspond with the nth point in a distribution
+    ///   of `indices.len()` points between (exclusive) `a` and `b`.
     /// - `points`: list of points where the results of the calculation
-    /// should end up. To be indexed by values in `indices`.
+    ///   should end up. To be indexed by values in `indices`.
     ///
     fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         for (percent, index) in indices.iter().enumerate() {
