@@ -762,7 +762,7 @@ impl TriangleContents {
                     Forward(ab),
                     Forward(bc),
                     Forward(ca),
-                    &**contents,
+                    contents,
                     buffer,
                 );
                 contents.add_indices(buffer);
@@ -816,7 +816,7 @@ impl TriangleContents {
                     Forward(ab),
                     Forward(bc),
                     Forward(ca),
-                    &**contents,
+                    contents,
                     buffer,
                 );
                 breaks(buffer);
@@ -1122,7 +1122,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
             .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
 
         for triangle in &mut *this.triangles {
-            triangle.calculate(&mut *this.shared_edges, &mut this.points, &this.shape);
+            triangle.calculate(&mut this.shared_edges, &mut this.points, &this.shape);
         }
 
         this.data = this.points.iter().copied().map(generator).collect();
@@ -1162,7 +1162,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     pub fn calculate_values(&mut self, generator: impl FnMut(Vec3A) -> T) {
         for triangle in &mut *self.triangles {
-            triangle.calculate(&mut *self.shared_edges, &mut self.points, &self.shape);
+            triangle.calculate(&mut self.shared_edges, &mut self.points, &self.shape);
         }
 
         self.data = self.points.iter().copied().map(generator).collect();
