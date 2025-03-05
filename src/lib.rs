@@ -25,24 +25,22 @@
 //! ```rust
 //! use hexasphere::shapes::IcoSphere;
 //!
-//! fn main() {
-//!     // Create a new sphere with 20 subdivisions
-//!     // an no data associated with the vertices.
-//!     let sphere = IcoSphere::new(20, |_| ());
+//! // Create a new sphere with 20 subdivisions
+//! // an no data associated with the vertices.
+//! let sphere = IcoSphere::new(20, |_| ());
 //!
-//!     let points = sphere.raw_points();
-//!     for p in points {
-//!         println!("{:?} is a point on the sphere!", p);
-//!     }
-//!     let indices = sphere.get_all_indices();
-//!     for triangle in indices.chunks(3) {
-//!         println!(
-//!             "[{}, {}, {}] is a triangle on the resulting shape",
-//!             triangle[0],
-//!             triangle[1],
-//!             triangle[2],
-//!         );
-//!     }
+//! let points = sphere.raw_points();
+//! for p in points {
+//!     println!("{:?} is a point on the sphere!", p);
+//! }
+//! let indices = sphere.get_all_indices();
+//! for triangle in indices.chunks(3) {
+//!     println!(
+//!         "[{}, {}, {}] is a triangle on the resulting shape",
+//!         triangle[0],
+//!         triangle[1],
+//!         triangle[2],
+//!     );
 //! }
 //! ```
 //!
