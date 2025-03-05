@@ -25,30 +25,28 @@
 //! ```rust
 //! use hexasphere::shapes::IcoSphere;
 //!
-//! fn main() {
-//!     // Create a new sphere with 20 subdivisions
-//!     // an no data associated with the vertices.
-//!     let sphere = IcoSphere::new(20, |_| ());
+//! // Create a new sphere with 20 subdivisions
+//! // an no data associated with the vertices.
+//! let sphere = IcoSphere::new(20, |_| ());
 //!
-//!     let points = sphere.raw_points();
-//!     for p in points {
-//!         println!("{:?} is a point on the sphere!", p);
-//!     }
-//!     let indices = sphere.get_all_indices();
-//!     for triangle in indices.chunks(3) {
-//!         println!(
-//!             "[{}, {}, {}] is a triangle on the resulting shape",
-//!             triangle[0],
-//!             triangle[1],
-//!             triangle[2],
-//!         );
-//!     }
+//! let points = sphere.raw_points();
+//! for p in points {
+//!     println!("{:?} is a point on the sphere!", p);
+//! }
+//! let indices = sphere.get_all_indices();
+//! for triangle in indices.chunks(3) {
+//!     println!(
+//!         "[{}, {}, {}] is a triangle on the resulting shape",
+//!         triangle[0],
+//!         triangle[1],
+//!         triangle[2],
+//!     );
 //! }
 //! ```
 //!
 //! # Features
 //! - `adjacency` allows the user to create neighbour maps from
-//! the indices provided by the `Subdivided` struct.
+//!   the indices provided by the `Subdivided` struct.
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -136,7 +134,7 @@ pub trait BaseShape {
     /// - `slerp` requires normalized (magnitude 1) data.
     /// - `lerp` doesn't care.
     /// - `normalized_lerp` requires normalized (magnitude 1)
-    /// data.
+    ///   data.
     ///
     fn initial_points(&self) -> Vec<Vec3A>;
 
@@ -169,11 +167,11 @@ pub trait BaseShape {
     /// in this crate:
     /// - [`lerp`] implements linear interpolation.
     /// - [`geometric_slerp`] implements spherical
-    /// interpolation. (Interpolates along an arc on a sphere)
+    ///   interpolation. (Interpolates along an arc on a sphere)
     /// - [`normalized_lerp`] implements cheaper
-    /// yet less accurate spherical interpolation. The accuracy
-    /// decreases as the angle between the two points on the unit
-    /// sphere increases.
+    ///   yet less accurate spherical interpolation. The accuracy
+    ///   decreases as the angle between the two points on the unit
+    ///   sphere increases.
     ///
     /// [`lerp`]: ../fn.lerp.html
     /// [`geometric_slerp`]: ../fn.geometric_slerp.html
@@ -199,11 +197,11 @@ pub trait BaseShape {
     /// - `a`: start.
     /// - `b`: end.
     /// - `indices`: list of indices to index into `points`. `points`
-    /// at the index should contain the result. The index (n) of an
-    /// index should correspond with the nth point in a distribution
-    /// of `indices.len()` points between (exclusive) `a` and `b`.
+    ///   at the index should contain the result. The index (n) of an
+    ///   index should correspond with the nth point in a distribution
+    ///   of `indices.len()` points between (exclusive) `a` and `b`.
     /// - `points`: list of points where the results of the calculation
-    /// should end up. To be indexed by values in `indices`.
+    ///   should end up. To be indexed by values in `indices`.
     ///
     fn interpolate_multiple(&self, a: Vec3A, b: Vec3A, indices: &[u32], points: &mut [Vec3A]) {
         for (percent, index) in indices.iter().enumerate() {
@@ -764,7 +762,7 @@ impl TriangleContents {
                     Forward(ab),
                     Forward(bc),
                     Forward(ca),
-                    &**contents,
+                    contents,
                     buffer,
                 );
                 contents.add_indices(buffer);
@@ -818,7 +816,7 @@ impl TriangleContents {
                     Forward(ab),
                     Forward(bc),
                     Forward(ca),
-                    &**contents,
+                    contents,
                     buffer,
                 );
                 breaks(buffer);
@@ -1120,11 +1118,10 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
 
         let diff = new_points - this.points.len();
-        this.points
-            .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
+        this.points.extend(core::iter::repeat_n(Vec3A::ZERO, diff));
 
         for triangle in &mut *this.triangles {
-            triangle.calculate(&mut *this.shared_edges, &mut this.points, &this.shape);
+            triangle.calculate(&mut this.shared_edges, &mut this.points, &this.shape);
         }
 
         this.data = this.points.iter().copied().map(generator).collect();
@@ -1155,8 +1152,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
 
         let diff = new_points - self.points.len();
-        self.points
-            .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
+        self.points.extend(core::iter::repeat_n(Vec3A::ZERO, diff));
     }
 
     ///
@@ -1164,7 +1160,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     ///
     pub fn calculate_values(&mut self, generator: impl FnMut(Vec3A) -> T) {
         for triangle in &mut *self.triangles {
-            triangle.calculate(&mut *self.shared_edges, &mut self.points, &self.shape);
+            triangle.calculate(&mut self.shared_edges, &mut self.points, &self.shape);
         }
 
         self.data = self.points.iter().copied().map(generator).collect();

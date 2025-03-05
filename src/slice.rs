@@ -10,7 +10,7 @@ pub enum Slice<'a, T> {
     Backward(&'a [T]),
 }
 
-impl<'a, T> Slice<'a, T> {
+impl<T> Slice<'_, T> {
     ///
     /// The length of the underlying slice.
     ///
@@ -21,7 +21,7 @@ impl<'a, T> Slice<'a, T> {
     }
 }
 
-impl<'a, T> Index<usize> for Slice<'a, T> {
+impl<T> Index<usize> for Slice<'_, T> {
     type Output = <[T] as Index<usize>>::Output;
 
     fn index(&self, idx: usize) -> &Self::Output {
