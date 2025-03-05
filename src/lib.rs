@@ -1118,8 +1118,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
 
         let diff = new_points - this.points.len();
-        this.points
-            .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
+        this.points.extend(core::iter::repeat_n(Vec3A::ZERO, diff));
 
         for triangle in &mut *this.triangles {
             triangle.calculate(&mut this.shared_edges, &mut this.points, &this.shape);
@@ -1153,8 +1152,7 @@ impl<T, S: BaseShape> Subdivided<T, S> {
         }
 
         let diff = new_points - self.points.len();
-        self.points
-            .extend(core::iter::repeat(Vec3A::ZERO).take(diff));
+        self.points.extend(core::iter::repeat_n(Vec3A::ZERO, diff));
     }
 
     ///
