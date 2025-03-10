@@ -29,6 +29,6 @@ libm = ["dep:libm", "glam/libm"]
 
 [dependencies]
 constgebra = { version = "0.1.4", default-features = false }
-glam = { version = "0.29.2", default-features = false }
+glam = { version = "0.30.0", default-features = false }
 libm = { version = "0.2", optional = true }
 tinyvec = { version = "1.8.1", optional = true, default-features = false }
