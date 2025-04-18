@@ -26,9 +26,11 @@ std = ["glam/std", "tinyvec?/std"]
 adjacency = ["dep:tinyvec"]
 shape-extras = []
 libm = ["dep:libm", "glam/libm"]
+serde = ["dep:serde", "tinyvec/serde", "glam/serde"]
 
 [dependencies]
 constgebra = { version = "0.1.4", default-features = false }
 glam = { version = "0.30.0", default-features = false }
 libm = { version = "0.2", optional = true }
+serde = { version = "1.0.219", optional = true, features=["serde_derive"] }
 tinyvec = { version = "1.8.1", optional = true, default-features = false }
