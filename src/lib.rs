@@ -1435,6 +1435,17 @@ impl<T, S: BaseShape> Subdivided<T, S> {
     pub fn linear_distance(&self, p1: u32, p2: u32, radius: f32) -> f32 {
         (self.points[p1 as usize] - self.points[p2 as usize]).length() * radius
     }
+
+    ///
+    /// Returns the base triangles used by the library internally.
+    ///
+    /// This typically won't be useful to most people, except for
+    /// when you want to know how many base triangles the shape
+    /// had originally.
+    ///
+    pub fn main_triangles(&self) -> &[Triangle] {
+        &self.triangles
+    }
 }
 
 #[cfg(feature = "shape-extras")]
