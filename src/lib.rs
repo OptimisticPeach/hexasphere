@@ -1126,6 +1126,8 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         this.data = this.points.iter().copied().map(generator).collect();
 
+        this.subdivisions = subdivisions;
+
         this
     }
 
@@ -1153,6 +1155,8 @@ impl<T, S: BaseShape> Subdivided<T, S> {
 
         let diff = new_points - self.points.len();
         self.points.extend(core::iter::repeat_n(Vec3A::ZERO, diff));
+
+        self.subdivisions += amount;
     }
 
     ///
@@ -2119,6 +2123,14 @@ mod tests {
                 4, 9, 1, 0, //
             ]
         );
+    }
+
+    #[test]
+    fn subdivisions() {
+        let subdivisions = 64;
+        let sphere = IcoSphere::new(subdivisions, |_| {});
+
+        assert_eq!(subdivisions, sphere.subdivisions());
     }
 
     #[cfg(feature = "adjacency")]
