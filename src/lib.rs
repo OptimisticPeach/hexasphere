@@ -243,6 +243,7 @@ pub trait EquilateralBaseShape: BaseShape {
 /// The edge between two main triangles.
 ///
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Edge {
     ///
     /// Indices of the points between the endpoints.
@@ -281,6 +282,7 @@ impl Edge {
 /// shared.
 ///
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum TriangleContents {
     ///
     /// Nothing inside the triangle: subdivisions 0 and 1
@@ -827,6 +829,7 @@ impl TriangleContents {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 ///
 /// A main triangle on the base shape of a subdivided shape.
 ///
@@ -1053,6 +1056,7 @@ impl Triangle {
 /// lie on the unit sphere.
 ///
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Subdivided<T, S: BaseShape> {
     points: Vec<Vec3A>,
     data: Vec<T>,

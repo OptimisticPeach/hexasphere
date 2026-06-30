@@ -19,6 +19,7 @@ use glam::Vec3A;
 /// then the result will be 12 pentagons and many hexagons.
 ///
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IcoSphereBase;
 
 impl BaseShape for IcoSphereBase {
@@ -90,6 +91,7 @@ impl<T> IcoSphere<T> {
 /// geometric spherical linear interpolation. (`nlerp` over `slerp`).
 ///
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NormIcoSphereBase;
 
 impl BaseShape for NormIcoSphereBase {
@@ -153,6 +155,7 @@ pub type NormIcoSphere<T> = Subdivided<T, NormIcoSphereBase>;
 /// be used for acceptable results.
 ///
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TetraSphereBase;
 
 impl BaseShape for TetraSphereBase {
@@ -214,6 +217,7 @@ pub type TetraSphere<T> = Subdivided<T, TetraSphereBase>;
 /// circle on the triangle has radius 1.0.
 ///
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TriangleBase;
 
 impl BaseShape for TriangleBase {
@@ -276,6 +280,7 @@ pub type TrianglePlane<T> = Subdivided<T, TriangleBase>;
 /// This is a square on the XZ plane.
 ///
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SquareBase;
 
 impl BaseShape for SquareBase {
@@ -324,6 +329,7 @@ pub type SquarePlane<T> = Subdivided<T, SquareBase>;
 /// enable this to be used in making a sphere.
 ///
 #[derive(Default, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CubeBase;
 
 impl BaseShape for CubeBase {
